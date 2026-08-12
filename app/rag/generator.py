@@ -167,10 +167,17 @@ def _build_messages(query: str, context: list[dict] | None) -> list[dict[str, st
     chunks = context or []
     if chunks:
         context_text = "\n\n".join(c.get("text", "") for c in chunks if c.get("text"))
+        length_hint = _length_instruction(query)
+        if any(c.get("chunk_type") == "catalog_exact" for c in chunks):
+            length_hint = (
+                "LENGTH: The user asked about product categories or catalog structure. "
+                "List EVERY category and subcategory from Context. Do not omit any. "
+                "Use a single comma-separated list or bullets — include all items, not a sample."
+            )
         user_content = (
             f"Context:\n{context_text}\n\n"
             f"Question: {query}\n\n"
-            f"{_length_instruction(query)}"
+            f"{length_hint}"
         )
         system_content = RAG_SYSTEM_PROMPT
     else:

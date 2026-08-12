@@ -196,18 +196,26 @@ def _sheet_records(sheet_name: str, rows: list[list]) -> list[str]:
     return records
 
 
-def extract_excel_records(content: bytes, filename: str) -> list[str]:
-    """Turn Excel sheets into labeled row records (header: value)."""
+def iter_excel_sheets(content: bytes, filename: str):
+    """Yield (sheet_name, raw_rows) for each sheet in an Excel workbook."""
     suffix = Path(filename).suffix.lower()
     if suffix == ".xlsx":
-        sheets = _iter_xlsx_sheets(content)
+        yield from _iter_xlsx_sheets(content)
     elif suffix == ".xls":
-        sheets = _iter_xls_sheets(content)
+        yield from _iter_xls_sheets(content)
     else:
         raise ValueError(f"Unsupported file type: {suffix}")
 
+
+def sheet_to_labeled_rows(sheet_name: str, rows: list[list]) -> list[str]:
+    """Convert raw sheet rows into header: value record strings."""
+    return _sheet_records(sheet_name, rows)
+
+
+def extract_excel_records(content: bytes, filename: str) -> list[str]:
+    """Turn Excel sheets into labeled row records (header: value)."""
     records: list[str] = []
-    for name, rows in sheets:
+    for name, rows in iter_excel_sheets(content, filename):
         records.extend(_sheet_records(name, rows))
     if not records:
         raise ValueError("No readable rows found in the spreadsheet")

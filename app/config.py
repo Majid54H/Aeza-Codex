@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     max_upload_size_mb: int = 10
     rag_top_k: int = 5
+    rag_catalog_top_k: int = 8
     rag_min_score: float = 0.25
+    excel_category_sample_products: int = 15
     web_fetch_timeout_seconds: int = 15
     web_fetch_max_bytes: int = 2_000_000
     admin_username: str = "admin"

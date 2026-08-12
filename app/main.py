@@ -5,10 +5,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
-from app.api import admin, chat, knowledge
+from app.api import admin, chat, knowledge as knowledge_api
 from app.api.deps import require_admin
 from app.config import settings
 from app.rag import faiss as faiss_index
+from app.services import knowledge as knowledge_service
 
 app = FastAPI(title="Aeza Codex", version="1.0.0")
 
@@ -33,7 +34,7 @@ app.mount("/static", DevStaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
+app.include_router(knowledge_api.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
@@ -65,3 +66,4 @@ async def startup():
     if settings.environment == "production" and not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is required when ENVIRONMENT=production")
     faiss_index.load()
+    await knowledge_service.rebuild_catalogs_from_documents()

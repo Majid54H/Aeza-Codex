@@ -74,14 +74,15 @@ def add(
     _index.add(vecs)
 
     for chunk in chunks:
-        _mapping.append(
-            {
-                "document_id": document_id,
-                "chunk_index": chunk.get("chunk_index"),
-                "text": chunk.get("text", ""),
-                "filename": filename,
-            }
-        )
+        entry = {
+            "document_id": document_id,
+            "chunk_index": chunk.get("chunk_index"),
+            "text": chunk.get("text", ""),
+            "filename": filename,
+        }
+        if chunk.get("chunk_type"):
+            entry["chunk_type"] = chunk["chunk_type"]
+        _mapping.append(entry)
 
     save()
 

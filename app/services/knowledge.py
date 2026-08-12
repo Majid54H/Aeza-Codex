@@ -5,6 +5,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from app.config import settings
+from app.ingestion.excel_analyzer import analyze_excel
+from app.ingestion.excel_chunks import build_excel_chunks
 from app.ingestion import pipeline
 from app.ingestion.loader import load_web_page
 from app.rag import faiss
@@ -115,6 +117,7 @@ async def delete_document(document_id: str) -> dict:
         raise FileNotFoundError("Source not found")
 
     await storage.delete_document(document_id)
+    storage.delete_catalog(document_id)
     faiss.remove_document(document_id)
     return {"status": "deleted", "document_id": document_id}
 
@@ -125,6 +128,7 @@ async def reindex_all() -> dict:
     docs = await storage.list_documents()
 
     faiss.rebuild()
+    storage.delete_all_catalogs()
 
     indexed = 0
     for doc in docs:
@@ -149,3 +153,31 @@ async def reindex_all() -> dict:
         indexed += 1
 
     return {"status": "reindex_complete", "documents": indexed}
+
+
+async def rebuild_catalogs_from_documents() -> int:
+    """Rebuild catalogs.json from stored Excel files without re-embedding."""
+    storage = get_storage()
+    docs = await storage.list_documents()
+    rebuilt = 0
+
+    for doc in docs:
+        filename = doc.get("filename") or ""
+        suffix = Path(filename).suffix.lower()
+        if suffix not in {".xlsx", ".xls"}:
+            continue
+        if storage.load_catalog(doc["id"]):
+            continue
+
+        try:
+            content = await storage.load_document(doc["id"])
+        except FileNotFoundError:
+            continue
+
+        analysis = analyze_excel(content, filename)
+        _, catalog, _ = build_excel_chunks(doc["id"], filename, analysis)
+        if catalog.get("categories") or catalog.get("product_count"):
+            storage.save_catalog(doc["id"], catalog)
+            rebuilt += 1
+
+    return rebuilt

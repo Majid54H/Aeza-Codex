@@ -90,6 +90,26 @@ class StorageBackend(ABC):
     def save_settings(self, data: dict) -> dict:
         ...
 
+    @abstractmethod
+    def save_catalog(self, document_id: str, catalog: dict) -> None:
+        ...
+
+    @abstractmethod
+    def load_catalog(self, document_id: str) -> dict | None:
+        ...
+
+    @abstractmethod
+    def delete_catalog(self, document_id: str) -> None:
+        ...
+
+    @abstractmethod
+    def delete_all_catalogs(self) -> None:
+        ...
+
+    @abstractmethod
+    def load_merged_catalog(self) -> dict | None:
+        ...
+
 
 class LocalStorage(StorageBackend):
     def __init__(self, base_dir: Path):
@@ -99,6 +119,8 @@ class LocalStorage(StorageBackend):
         self.documents_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         self.indexes_dir.mkdir(parents=True, exist_ok=True)
+        self.catalogs_dir = self.metadata_dir / "catalogs"
+        self.catalogs_dir.mkdir(parents=True, exist_ok=True)
 
     def _document_paths(self, document_id: str) -> list[Path]:
         prefix = f"{document_id}_"
@@ -130,6 +152,7 @@ class LocalStorage(StorageBackend):
             meta_path.unlink()
         except FileNotFoundError:
             pass
+        self.delete_catalog(document_id)
 
     async def save_metadata(self, document_id: str, metadata: dict) -> None:
         path = self.metadata_dir / f"{document_id}.json"
@@ -200,6 +223,106 @@ class LocalStorage(StorageBackend):
         path = self.metadata_dir / SETTINGS_FILE
         path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
         return merged
+
+    def _catalog_path(self, document_id: str) -> Path:
+        return self.catalogs_dir / f"{document_id}.json"
+
+    def save_catalog(self, document_id: str, catalog: dict) -> None:
+        path = self._catalog_path(document_id)
+        path.write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def load_catalog(self, document_id: str) -> dict | None:
+        path = self._catalog_path(document_id)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def delete_catalog(self, document_id: str) -> None:
+        path = self._catalog_path(document_id)
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def delete_all_catalogs(self) -> None:
+        if not self.catalogs_dir.exists():
+            return
+        for path in self.catalogs_dir.glob("*.json"):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+    def load_merged_catalog(self) -> dict | None:
+        if not self.catalogs_dir.exists():
+            return None
+
+        merged_categories: dict[str, dict] = {}
+        total_products = 0
+        sources: list[dict] = []
+
+        for path in sorted(self.catalogs_dir.glob("*.json")):
+            try:
+                catalog = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            if not catalog:
+                continue
+
+            sources.append(
+                {
+                    "document_id": catalog.get("document_id", path.stem),
+                    "filename": catalog.get("filename", ""),
+                    "product_count": catalog.get("product_count", 0),
+                }
+            )
+            total_products += int(catalog.get("product_count") or 0)
+
+            for cat in catalog.get("categories") or []:
+                name = (cat.get("name") or "").strip()
+                if not name:
+                    continue
+                entry = merged_categories.setdefault(
+                    name,
+                    {
+                        "name": name,
+                        "subcategories": set(),
+                        "product_count": 0,
+                        "sample_products": [],
+                    },
+                )
+                for sub in cat.get("subcategories") or []:
+                    if sub:
+                        entry["subcategories"].add(sub)
+                entry["product_count"] += int(cat.get("product_count") or 0)
+                cap = settings.excel_category_sample_products
+                for sample in cat.get("sample_products") or []:
+                    if sample and sample not in entry["sample_products"] and len(entry["sample_products"]) < cap:
+                        entry["sample_products"].append(sample)
+
+        if not merged_categories:
+            return None
+
+        categories = []
+        for name in sorted(merged_categories.keys(), key=str.lower):
+            entry = merged_categories[name]
+            categories.append(
+                {
+                    "name": name,
+                    "subcategories": sorted(entry["subcategories"], key=str.lower),
+                    "product_count": entry["product_count"],
+                    "sample_products": entry["sample_products"],
+                }
+            )
+
+        return {
+            "categories": categories,
+            "product_count": total_products,
+            "sources": sources,
+        }
 
 
 def get_storage() -> StorageBackend:
