@@ -1,0 +1,23 @@
+.env
+.env.*
+
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+
+# Local development only (uploaded docs + built indexes)
+data/documents/*
+!data/documents/.gitkeep
+
+data/indexes/*
+!data/indexes/.gitkeep
+
+data/metadata/*
+!data/metadata/.gitkeep
+
+# FAISS artifacts (redundant with data/indexes/* but explicit for clarity)
+data/indexes/faiss.index
+data/indexes/faiss_mapping.json
+

@@ -4,6 +4,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.services import knowledge as knowledge_service
+
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
@@ -16,4 +18,5 @@ async def admin_page(request: Request):
 @router.post("/reindex")
 async def reindex():
     """Trigger a full re-index of the knowledge base."""
-    return {"status": "reindex_started"}
+    await knowledge_service.reindex_all()
+    return {"status": "reindex_complete"}
