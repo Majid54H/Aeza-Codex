@@ -9,8 +9,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     environment: str = "development"
     openai_api_key: str = ""
+    openai_base_url: str = ""
     embedding_model: str = "text-embedding-3-small"
     chat_model: str = "gpt-4o-mini"
+    chat_max_tokens: int = 4096
     data_dir: Path = Path("data")
     max_upload_size_mb: int = 10
     rag_top_k: int = 5

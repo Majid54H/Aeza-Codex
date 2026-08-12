@@ -12,7 +12,7 @@ Self-hostable RAG chatbot for a business knowledge base. FastAPI backend, vanill
 ## Requirements
 
 - Python 3.11+
-- OpenAI API key
+- LLM API key (NVIDIA NIM or OpenAI-compatible)
 - Single-process deployment (do **not** run multiple uvicorn workers — FAISS is in-memory per process)
 
 ## Setup
@@ -26,7 +26,7 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env — at minimum set OPENAI_API_KEY and ADMIN_PASSWORD
+# Edit .env — at minimum set OPENAI_API_KEY, OPENAI_BASE_URL, and ADMIN_PASSWORD
 ```
 
 ## Run
@@ -47,12 +47,14 @@ Then open:
 
 | Variable | Required | Default | Notes |
 |----------|----------|---------|--------|
-| `OPENAI_API_KEY` | Yes (prod) | — | Required for embeddings and chat; production startup fails if missing |
+| `OPENAI_API_KEY` | Yes (prod) | — | NVIDIA or OpenAI key; production startup fails if missing |
+| `OPENAI_BASE_URL` | For NVIDIA | — | e.g. `https://integrate.api.nvidia.com/v1` |
 | `ADMIN_PASSWORD` | Yes for admin | — | Empty → admin routes return 503 |
 | `ADMIN_USERNAME` | No | `admin` | HTTP Basic username |
 | `ENVIRONMENT` | No | `development` | Use `production` to enforce API key at startup |
-| `EMBEDDING_MODEL` | No | `text-embedding-3-small` | |
-| `CHAT_MODEL` | No | `gpt-4o-mini` | |
+| `EMBEDDING_MODEL` | No | `text-embedding-3-small` | NVIDIA: `nvidia/nv-embedqa-e5-v5` |
+| `CHAT_MODEL` | No | `gpt-4o-mini` | NVIDIA: `openai/gpt-oss-120b` |
+| `CHAT_MAX_TOKENS` | No | `4096` | Completion budget (needed for reasoning models) |
 | `DATA_DIR` | No | `data` | Local documents, metadata, FAISS bytes |
 | `MAX_UPLOAD_SIZE_MB` | No | `10` | |
 | `RAG_TOP_K` | No | `5` | |

@@ -41,19 +41,25 @@ class LLMProvider(ABC):
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str = ""):
         self.api_key = api_key
         self.model = model
+        self.base_url = base_url
 
     async def generate(self, messages: list[dict[str, str]]) -> str:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=self.api_key)
+        kwargs: dict[str, Any] = {"api_key": self.api_key}
+        if self.base_url:
+            kwargs["base_url"] = self.base_url
+        client = AsyncOpenAI(**kwargs)
         response = await client.chat.completions.create(
             model=self.model,
             messages=messages,
+            max_tokens=settings.chat_max_tokens,
         )
-        content = response.choices[0].message.content
+        message = response.choices[0].message
+        content = message.content
         return content.strip() if content else ""
 
 
@@ -64,6 +70,7 @@ def get_llm_provider() -> LLMProvider | None:
     return OpenAIProvider(
         api_key=settings.openai_api_key,
         model=settings.chat_model,
+        base_url=settings.openai_base_url,
     )
 
 

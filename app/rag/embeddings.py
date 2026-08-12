@@ -13,9 +13,16 @@ async def embed(texts: list[str]) -> list[list[float]]:
 
     from openai import AsyncOpenAI
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-    response = await client.embeddings.create(
-        model=settings.embedding_model,
-        input=texts,
-    )
+    kwargs: dict = {"api_key": settings.openai_api_key}
+    if settings.openai_base_url:
+        kwargs["base_url"] = settings.openai_base_url
+    client = AsyncOpenAI(**kwargs)
+    create_kwargs: dict = {
+        "model": settings.embedding_model,
+        "input": texts,
+    }
+    if "nvidia.com" in (settings.openai_base_url or ""):
+        create_kwargs["encoding_format"] = "float"
+        create_kwargs["extra_body"] = {"input_type": "query", "truncate": "NONE"}
+    response = await client.embeddings.create(**create_kwargs)
     return [item.embedding for item in response.data]
