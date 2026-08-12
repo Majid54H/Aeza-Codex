@@ -110,6 +110,26 @@ class StorageBackend(ABC):
     def load_merged_catalog(self) -> dict | None:
         ...
 
+    @abstractmethod
+    def save_products(self, document_id: str, products: dict) -> None:
+        ...
+
+    @abstractmethod
+    def load_products(self, document_id: str) -> dict | None:
+        ...
+
+    @abstractmethod
+    def delete_products(self, document_id: str) -> None:
+        ...
+
+    @abstractmethod
+    def delete_all_products(self) -> None:
+        ...
+
+    @abstractmethod
+    def load_all_products(self) -> list[dict]:
+        ...
+
 
 class LocalStorage(StorageBackend):
     def __init__(self, base_dir: Path):
@@ -121,6 +141,8 @@ class LocalStorage(StorageBackend):
         self.indexes_dir.mkdir(parents=True, exist_ok=True)
         self.catalogs_dir = self.metadata_dir / "catalogs"
         self.catalogs_dir.mkdir(parents=True, exist_ok=True)
+        self.products_dir = self.metadata_dir / "products"
+        self.products_dir.mkdir(parents=True, exist_ok=True)
 
     def _document_paths(self, document_id: str) -> list[Path]:
         prefix = f"{document_id}_"
@@ -153,6 +175,7 @@ class LocalStorage(StorageBackend):
         except FileNotFoundError:
             pass
         self.delete_catalog(document_id)
+        self.delete_products(document_id)
 
     async def save_metadata(self, document_id: str, metadata: dict) -> None:
         path = self.metadata_dir / f"{document_id}.json"
@@ -323,6 +346,52 @@ class LocalStorage(StorageBackend):
             "product_count": total_products,
             "sources": sources,
         }
+
+    def _products_path(self, document_id: str) -> Path:
+        return self.products_dir / f"{document_id}.json"
+
+    def save_products(self, document_id: str, products: dict) -> None:
+        path = self._products_path(document_id)
+        path.write_text(json.dumps(products, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def load_products(self, document_id: str) -> dict | None:
+        path = self._products_path(document_id)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def delete_products(self, document_id: str) -> None:
+        path = self._products_path(document_id)
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def delete_all_products(self) -> None:
+        if not self.products_dir.exists():
+            return
+        for path in self.products_dir.glob("*.json"):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+
+    def load_all_products(self) -> list[dict]:
+        if not self.products_dir.exists():
+            return []
+        products: list[dict] = []
+        for path in sorted(self.products_dir.glob("*.json")):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            for item in payload.get("products") or []:
+                if isinstance(item, dict) and item.get("name"):
+                    products.append(item)
+        return products
 
 
 def get_storage() -> StorageBackend:

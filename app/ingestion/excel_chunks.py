@@ -17,10 +17,45 @@ def _product_lines(product: ProductRecord) -> list[str]:
         lines.append(f"Brand: {product.brand}")
     if product.price:
         lines.append(f"Price: {product.price}")
+    if product.color:
+        lines.append(f"Color: {product.color}")
+    if product.size:
+        lines.append(f"Size: {product.size}")
+    if product.stock:
+        lines.append(f"Stock: {product.stock}")
+    if product.discount:
+        lines.append(f"Discount: {product.discount}")
     for key, value in product.attributes.items():
         if value:
             lines.append(f"{key}: {value}")
     return lines
+
+
+def product_to_dict(product: ProductRecord, document_id: str, index: int) -> dict:
+    return {
+        "id": f"{document_id}:{index}",
+        "name": product.name,
+        "category": product.category,
+        "subcategory": product.subcategory,
+        "brand": product.brand,
+        "price": product.price,
+        "color": product.color,
+        "size": product.size,
+        "stock": product.stock,
+        "discount": product.discount,
+        "attributes": dict(product.attributes),
+    }
+
+
+def build_products_dict(document_id: str, filename: str, analysis: ExcelAnalysis) -> dict:
+    return {
+        "document_id": document_id,
+        "filename": filename,
+        "products": [
+            product_to_dict(product, document_id, i)
+            for i, product in enumerate(analysis.products)
+        ],
+    }
 
 
 def _product_summary(product: ProductRecord) -> str:
@@ -121,10 +156,11 @@ def build_excel_chunks(
     document_id: str,
     filename: str,
     analysis: ExcelAnalysis,
-) -> tuple[list[dict], dict, dict]:
-    """Return FAISS chunk dicts and catalog metadata for an Excel document."""
+) -> tuple[list[dict], dict, dict, dict]:
+    """Return FAISS chunk dicts, catalog metadata, and products for an Excel document."""
     sample_cap = settings.excel_category_sample_products
     catalog = build_catalog_dict(document_id, filename, analysis, sample_cap)
+    products_payload = build_products_dict(document_id, filename, analysis)
     chunks: list[dict] = []
     chunk_index = 0
     breakdown = {"product": 0, "category": 0, "catalog": 0, "generic": 0}
@@ -181,4 +217,4 @@ def build_excel_chunks(
             chunk_index += 1
             breakdown["generic"] += 1
 
-    return chunks, catalog, breakdown
+    return chunks, catalog, products_payload, breakdown

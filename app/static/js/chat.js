@@ -224,6 +224,250 @@ function updateAssistantMessage(bubble, text) {
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+function stockLabel(stock) {
+    const raw = String(stock || "").trim();
+    if (!raw) return "";
+    const lower = raw.toLowerCase();
+    if (lower === "0" || lower === "out of stock" || lower === "oos") {
+        return { text: "Out of stock", inStock: false };
+    }
+    const digits = raw.replace(/[^\d]/g, "");
+    if (digits) {
+        return { text: `In stock (${digits} pcs)`, inStock: true };
+    }
+    return { text: raw, inStock: true };
+}
+
+function appendDetailRow(parent, icon, label, value, valueClass, options = {}) {
+    if (!value) return;
+    const row = document.createElement("div");
+    row.className = "product-card-row";
+    const iconEl = document.createElement("span");
+    iconEl.className = "product-card-icon";
+    iconEl.setAttribute("aria-hidden", "true");
+    iconEl.textContent = icon;
+
+    const textWrap = document.createElement("span");
+    textWrap.className = "product-card-text";
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "product-card-label";
+    labelEl.textContent = `${label}: `;
+    textWrap.appendChild(labelEl);
+
+    if (options.swatchColor) {
+        const swatch = document.createElement("span");
+        swatch.className = "product-color-swatch";
+        swatch.style.backgroundColor = options.swatchColor;
+        swatch.setAttribute("aria-hidden", "true");
+        textWrap.appendChild(swatch);
+    }
+
+    const valueEl = document.createElement("span");
+    valueEl.className = valueClass || "product-card-value";
+    valueEl.textContent = value;
+    textWrap.appendChild(valueEl);
+
+    row.appendChild(iconEl);
+    row.appendChild(textWrap);
+    parent.appendChild(row);
+}
+
+function colorSwatchFromName(name) {
+    const raw = String(name || "").toLowerCase();
+    const map = {
+        grey: "#9CA3AF",
+        gray: "#9CA3AF",
+        black: "#111111",
+        white: "#F3F4F6",
+        beige: "#D4B896",
+        brown: "#8B5E3C",
+        red: "#DC2626",
+        blue: "#2563EB",
+        green: "#16A34A",
+        yellow: "#EAB308",
+        orange: "#EA580C",
+        pink: "#EC4899",
+        purple: "#9333EA",
+        navy: "#1E3A8A",
+        cream: "#F5F0E6",
+        canvas: "#C4A882",
+    };
+    for (const [key, hex] of Object.entries(map)) {
+        if (raw.includes(key)) return hex;
+    }
+    return "#D1D5DB";
+}
+
+function renderProductCard(product) {
+    const card = document.createElement("article");
+    card.className = "product-card";
+    if (product.best_value) card.classList.add("is-best-value");
+
+    if (product.best_value) {
+        const badge = document.createElement("div");
+        badge.className = "product-badge best-value";
+        badge.textContent = "Best Value";
+        card.appendChild(badge);
+    }
+
+    if (product.subcategory || product.category) {
+        const meta = document.createElement("div");
+        meta.className = "product-card-meta";
+        if (product.subcategory) {
+            const sub = document.createElement("span");
+            sub.className = "product-chip subcategory";
+            sub.textContent = product.subcategory;
+            meta.appendChild(sub);
+        } else if (product.category) {
+            const cat = document.createElement("span");
+            cat.className = "product-chip category";
+            cat.textContent = product.category;
+            meta.appendChild(cat);
+        }
+        card.appendChild(meta);
+    }
+
+    const title = document.createElement("h4");
+    title.className = "product-card-title";
+    title.textContent = product.name || "Product";
+    card.appendChild(title);
+
+    if (product.color) {
+        appendDetailRow(card, "◉", "Color", product.color, "product-color-value", {
+            swatchColor: colorSwatchFromName(product.color),
+        });
+    }
+    appendDetailRow(card, "▣", "Size", product.size, "product-size-value");
+    appendDetailRow(card, "₨", "Price", product.price, "product-price");
+
+    if (product.discount) {
+        const discount = document.createElement("div");
+        discount.className = "product-discount";
+        const tag = document.createElement("span");
+        tag.className = "product-discount-tag";
+        tag.textContent = product.discount;
+        discount.appendChild(tag);
+        card.appendChild(discount);
+    }
+
+    const stock = stockLabel(product.stock);
+    if (stock) {
+        const stockRow = document.createElement("div");
+        stockRow.className = `product-stock ${stock.inStock ? "in-stock" : "out-stock"}`;
+        const dot = document.createElement("span");
+        dot.className = "product-stock-dot";
+        stockRow.appendChild(dot);
+        const label = document.createElement("span");
+        label.textContent = stock.text;
+        stockRow.appendChild(label);
+        card.appendChild(stockRow);
+    }
+
+    return card;
+}
+
+function renderProductUi(stack, ui) {
+    if (!stack || !ui || !ui.layout) return;
+
+    const existing = stack.querySelector(".product-ui");
+    if (existing) existing.remove();
+
+    const wrap = document.createElement("div");
+    wrap.className = `product-ui product-ui-${ui.layout}`;
+
+    const products = Array.isArray(ui.products) ? ui.products : [];
+    const grid = document.createElement("div");
+    grid.className = ui.layout === "product_compare" ? "product-compare-grid" : "product-card-grid";
+    products.forEach((product) => {
+        grid.appendChild(renderProductCard(product));
+    });
+    wrap.appendChild(grid);
+
+    if (ui.layout === "product_compare" && Array.isArray(ui.features) && ui.features.length) {
+        const section = document.createElement("div");
+        section.className = "product-compare-table-wrap";
+
+        const heading = document.createElement("h4");
+        heading.className = "product-compare-heading";
+        heading.textContent = "Quick compare";
+        section.appendChild(heading);
+
+        const table = document.createElement("table");
+        table.className = "product-compare-table";
+
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        const featureTh = document.createElement("th");
+        featureTh.textContent = "Feature";
+        headRow.appendChild(featureTh);
+        products.forEach((product) => {
+            const th = document.createElement("th");
+            th.textContent = product.name || "Product";
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        ui.features.forEach((feature) => {
+            const tr = document.createElement("tr");
+            const labelTd = document.createElement("td");
+            labelTd.className = "product-compare-feature";
+            labelTd.textContent = feature.label || "";
+            tr.appendChild(labelTd);
+            const rowClass = {
+                Color: "compare-color",
+                Price: "compare-price",
+                Discount: "compare-discount",
+                Stock: "compare-stock",
+            }[feature.label || ""];
+            (feature.values || []).forEach((value) => {
+                const td = document.createElement("td");
+                if (rowClass) td.classList.add(rowClass);
+                if (feature.label === "Color" && value) {
+                    const wrap = document.createElement("span");
+                    wrap.className = "product-compare-color-cell";
+                    const swatch = document.createElement("span");
+                    swatch.className = "product-color-swatch";
+                    swatch.style.backgroundColor = colorSwatchFromName(value);
+                    swatch.setAttribute("aria-hidden", "true");
+                    wrap.appendChild(swatch);
+                    const text = document.createElement("span");
+                    text.textContent = value;
+                    wrap.appendChild(text);
+                    td.appendChild(wrap);
+                } else {
+                    td.textContent = value || "—";
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        section.appendChild(table);
+        wrap.appendChild(section);
+    }
+
+    if (ui.tip) {
+        const tip = document.createElement("div");
+        tip.className = "product-tip";
+        const tipLabel = document.createElement("strong");
+        tipLabel.textContent = "Not sure? ";
+        tip.appendChild(tipLabel);
+        tip.appendChild(document.createTextNode(String(ui.tip).replace(/^Not sure\?\s*/i, "")));
+        wrap.appendChild(tip);
+    }
+
+    const meta = stack.querySelector(".msg-meta");
+    if (meta) {
+        stack.insertBefore(wrap, meta);
+    } else {
+        stack.appendChild(wrap);
+    }
+    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
 async function readChatStream(res, onEvent) {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -358,6 +602,10 @@ form.addEventListener("submit", async (e) => {
                 }
                 fullText += event.text;
                 updateAssistantMessage(bubble, fullText);
+            }
+            if (event.type === "done" && event.ui && bubble) {
+                const stack = bubble.closest(".msg-stack");
+                renderProductUi(stack, event.ui);
             }
             if (event.type === "error") {
                 if (!bubble) {

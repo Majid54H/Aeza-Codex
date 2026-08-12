@@ -118,6 +118,7 @@ async def delete_document(document_id: str) -> dict:
 
     await storage.delete_document(document_id)
     storage.delete_catalog(document_id)
+    storage.delete_products(document_id)
     faiss.remove_document(document_id)
     return {"status": "deleted", "document_id": document_id}
 
@@ -129,6 +130,7 @@ async def reindex_all() -> dict:
 
     faiss.rebuild()
     storage.delete_all_catalogs()
+    storage.delete_all_products()
 
     indexed = 0
     for doc in docs:
@@ -156,7 +158,7 @@ async def reindex_all() -> dict:
 
 
 async def rebuild_catalogs_from_documents() -> int:
-    """Rebuild catalogs.json from stored Excel files without re-embedding."""
+    """Rebuild catalogs.json and products.json from stored Excel files without re-embedding."""
     storage = get_storage()
     docs = await storage.list_documents()
     rebuilt = 0
@@ -166,8 +168,6 @@ async def rebuild_catalogs_from_documents() -> int:
         suffix = Path(filename).suffix.lower()
         if suffix not in {".xlsx", ".xls"}:
             continue
-        if storage.load_catalog(doc["id"]):
-            continue
 
         try:
             content = await storage.load_document(doc["id"])
@@ -175,9 +175,12 @@ async def rebuild_catalogs_from_documents() -> int:
             continue
 
         analysis = analyze_excel(content, filename)
-        _, catalog, _ = build_excel_chunks(doc["id"], filename, analysis)
+        _, catalog, products_payload, _ = build_excel_chunks(doc["id"], filename, analysis)
         if catalog.get("categories") or catalog.get("product_count"):
             storage.save_catalog(doc["id"], catalog)
+        if products_payload.get("products"):
+            storage.save_products(doc["id"], products_payload)
+        if catalog.get("categories") or products_payload.get("products"):
             rebuilt += 1
 
     return rebuilt

@@ -15,7 +15,9 @@ TABLE_SUFFIXES = {".xlsx", ".xls"}
 async def run_excel(document_id: str, content: bytes, filename: str) -> list[dict]:
     """Hybrid Excel ingest: product, category, and catalog summary chunks."""
     analysis = analyze_excel(content, filename)
-    chunks, catalog, breakdown = build_excel_chunks(document_id, filename, analysis)
+    chunks, catalog, products_payload, breakdown = build_excel_chunks(
+        document_id, filename, analysis
+    )
 
     if not chunks:
         records = extract_excel_records(content, filename)
@@ -25,6 +27,8 @@ async def run_excel(document_id: str, content: bytes, filename: str) -> list[dic
     storage = get_storage()
     if catalog.get("categories") or catalog.get("product_count"):
         storage.save_catalog(document_id, catalog)
+    if products_payload.get("products"):
+        storage.save_products(document_id, products_payload)
 
     extra = {
         "source_type": "excel",

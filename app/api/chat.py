@@ -20,6 +20,7 @@ class ChatResponse(BaseModel):
     reply: str
     session_id: str
     sources: list[dict] = []
+    ui: dict | None = None
 
 
 @router.post("", response_model=ChatResponse)

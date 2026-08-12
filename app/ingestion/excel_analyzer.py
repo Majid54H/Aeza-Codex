@@ -17,6 +17,7 @@ PRICE_KEYS = {"price", "sale_price", "cost", "mrp", "regular_price"}
 STOCK_KEYS = {"stock", "quantity", "qty", "in_stock", "inventory"}
 SIZE_KEYS = {"size", "sizes"}
 COLOR_KEYS = {"color", "colour", "colors"}
+DISCOUNT_KEYS = {"discount", "sale", "off", "percent_off", "pct_off", "%_off"}
 
 
 def _norm_header(value: Any) -> str:
@@ -66,6 +67,10 @@ class ProductRecord:
     subcategory: str = ""
     brand: str = ""
     price: str = ""
+    stock: str = ""
+    color: str = ""
+    size: str = ""
+    discount: str = ""
     attributes: dict[str, str] = field(default_factory=dict)
     sheet: str = ""
 
@@ -125,7 +130,24 @@ def _parse_product_sheet(
     brand_idx = _match_column(headers, BRAND_KEYS)
     price_idx = _match_column(headers, PRICE_KEYS)
     stock_idx = _match_column(headers, STOCK_KEYS)
-    used = {i for i in (cat_idx, sub_idx, name_idx, brand_idx, price_idx, stock_idx) if i is not None}
+    color_idx = _match_column(headers, COLOR_KEYS)
+    size_idx = _match_column(headers, SIZE_KEYS)
+    discount_idx = _match_column(headers, DISCOUNT_KEYS)
+    used = {
+        i
+        for i in (
+            cat_idx,
+            sub_idx,
+            name_idx,
+            brand_idx,
+            price_idx,
+            stock_idx,
+            color_idx,
+            size_idx,
+            discount_idx,
+        )
+        if i is not None
+    }
 
     for row in rows:
         category = row[cat_idx] if cat_idx is not None and cat_idx < len(row) else ""
@@ -138,6 +160,10 @@ def _parse_product_sheet(
 
         brand = row[brand_idx] if brand_idx is not None and brand_idx < len(row) else ""
         price = row[price_idx] if price_idx is not None and price_idx < len(row) else ""
+        stock = row[stock_idx] if stock_idx is not None and stock_idx < len(row) else ""
+        color = row[color_idx] if color_idx is not None and color_idx < len(row) else ""
+        size = row[size_idx] if size_idx is not None and size_idx < len(row) else ""
+        discount = row[discount_idx] if discount_idx is not None and discount_idx < len(row) else ""
         attrs: dict[str, str] = {}
         for i, h in enumerate(headers):
             if i in used or i >= len(row) or not row[i]:
@@ -157,6 +183,10 @@ def _parse_product_sheet(
                 subcategory=subcategory,
                 brand=brand,
                 price=price,
+                stock=stock,
+                color=color,
+                size=size,
+                discount=discount,
                 attributes=attrs,
                 sheet=sheet_name,
             )

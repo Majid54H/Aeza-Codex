@@ -6,6 +6,7 @@ import uuid
 from app.config import settings
 from app.rag import embeddings, faiss
 from app.rag.generator import NO_CONTEXT_REPLY, generate, generate_stream
+from app.services.product_ui import try_product_ui_reply
 from app.storage.storage import get_storage
 
 _EMBED_ERROR_REPLY = (
@@ -15,33 +16,61 @@ _EMBED_ERROR_REPLY = (
 
 _CATALOG_PATTERNS = (
     r"\ball categories\b",
+    r"\ball .{0,24} categor",
     r"\blist categories\b",
+    r"\blist .{0,24} categor",
     r"\bwhat categories\b",
     r"\bwhich categories\b",
     r"\bavailable categories\b",
     r"\bcategories (?:which are |that are )?available\b",
+    r"\bcategor.{0,20} available\b",
     r"\bgive (?:me )?(?:all )?categories\b",
+    r"\bgive (?:me )?(?:all )?.{0,24} categor",
     r"\bcategories do you\b",
     r"\bcategories (?:are|do)\b",
     r"\bsubcategories?\b",
     r"\bcatalog overview\b",
     r"\bproduct categories\b",
+    r"\bproducts categories\b",
     r"\btypes of products\b",
     r"\bwhat (?:do you|products do you) (?:sell|carry|offer|have)\b",
 )
 
 _FULL_CATEGORY_LIST_PATTERNS = (
     r"\ball categories\b",
+    r"\ball .{0,24} categor",
     r"\blist categories\b",
+    r"\blist .{0,24} categor",
     r"\bwhat categories\b",
     r"\bwhich categories\b",
     r"\bavailable categories\b",
     r"\bcategories (?:which are |that are )?available\b",
+    r"\bcategor.{0,20} available\b",
     r"\bgive (?:me )?(?:all )?categories\b",
+    r"\bgive (?:me )?(?:all )?.{0,24} categor",
     r"\bproduct categories\b",
+    r"\bproducts categories\b",
     r"\btypes of products\b",
     r"\bcatalog overview\b",
     r"\bwhat (?:do you|products do you) (?:sell|carry|offer|have)\b",
+    r"\bshow (?:me )?(?:all )?.{0,24} categor",
+    r"\btell (?:me )?(?:all )?.{0,24} categor",
+)
+
+_PRODUCT_COUNT_PATTERNS = (
+    r"\bhow many products\b",
+    r"\bnumber of products\b",
+    r"\btotal products\b",
+    r"\bproducts (?:are there|do you have|in total|in the catalog)\b",
+    r"\bcount (?:of )?products\b",
+    r"\bhow many items\b",
+)
+
+_CATEGORY_COUNT_PATTERNS = (
+    r"\bhow many categories\b",
+    r"\bnumber of categories\b",
+    r"\btotal categories\b",
+    r"\bcount (?:of )?categories\b",
 )
 
 _SUBCATEGORY_PATTERNS = (
@@ -51,22 +80,65 @@ _SUBCATEGORY_PATTERNS = (
     r"\btypes of .+ in\b",
 )
 
+_TYPO_REPLACEMENTS = (
+    ("gvie", "give"),
+    ("gvei", "give"),
+    ("categries", "categories"),
+    ("categoreis", "categories"),
+    ("categoy", "category"),
+    ("availble", "available"),
+    ("avaialble", "available"),
+    ("avai lable", "available"),
+)
+
+
+def _normalize_query(message: str) -> str:
+    text = (message or "").strip().lower()
+    text = re.sub(r"[^\w\s]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    for wrong, right in _TYPO_REPLACEMENTS:
+        text = text.replace(wrong, right)
+    return text
+
 
 def is_catalog_query(message: str) -> bool:
-    text = (message or "").strip().lower()
+    text = _normalize_query(message)
     if not text:
         return False
-    return any(re.search(pattern, text) for pattern in _CATALOG_PATTERNS)
+    if any(re.search(pattern, text) for pattern in _CATALOG_PATTERNS):
+        return True
+    return _looks_like_category_list_query(text)
+
+
+def _looks_like_category_list_query(text: str) -> bool:
+    has_category = bool(re.search(r"\bcategor", text))
+    has_list_intent = bool(re.search(r"\b(all|available|list|what|which|give|show|tell)\b", text))
+    has_catalog_context = bool(re.search(r"\b(product|products|catalog|inventory|items)\b", text))
+    return has_category and has_list_intent and (has_catalog_context or "available" in text)
 
 
 def _is_full_category_list_query(message: str) -> bool:
-    text = (message or "").strip().lower()
-    return any(re.search(pattern, text) for pattern in _FULL_CATEGORY_LIST_PATTERNS)
+    text = _normalize_query(message)
+    if any(re.search(pattern, text) for pattern in _FULL_CATEGORY_LIST_PATTERNS):
+        return True
+    return _looks_like_category_list_query(text)
 
 
 def _is_subcategory_query(message: str) -> bool:
-    text = (message or "").strip().lower()
+    text = _normalize_query(message)
     return any(re.search(pattern, text) for pattern in _SUBCATEGORY_PATTERNS)
+
+
+def _is_product_count_query(message: str) -> bool:
+    text = _normalize_query(message)
+    if any(re.search(pattern, text) for pattern in _PRODUCT_COUNT_PATTERNS):
+        return True
+    return bool(re.search(r"\bhow many\b", text) and re.search(r"\bproducts?\b", text))
+
+
+def _is_category_count_query(message: str) -> bool:
+    text = _normalize_query(message)
+    return any(re.search(pattern, text) for pattern in _CATEGORY_COUNT_PATTERNS)
 
 
 def _find_category_in_query(message: str, catalog: dict) -> str | None:
@@ -106,6 +178,36 @@ def format_subcategories_reply(catalog: dict, category: str) -> str | None:
     return None
 
 
+def format_product_count_reply(catalog: dict) -> str | None:
+    categories = catalog.get("categories") or []
+    total = int(catalog.get("product_count") or 0)
+    if total <= 0 and not categories:
+        return None
+
+    if total <= 0:
+        total = sum(int(c.get("product_count") or 0) for c in categories)
+
+    lines = [f"There are {total} products in the catalog."]
+    for cat in sorted(categories, key=lambda c: (c.get("name") or "").lower()):
+        name = (cat.get("name") or "").strip()
+        if not name:
+            continue
+        count = int(cat.get("product_count") or 0)
+        lines.append(f"- {name}: {count} products")
+    return "\n".join(lines)
+
+
+def format_category_count_reply(catalog: dict) -> str | None:
+    names = sorted(
+        (c.get("name") or "").strip()
+        for c in catalog.get("categories") or []
+        if (c.get("name") or "").strip()
+    )
+    if not names:
+        return None
+    return f"There are {len(names)} categories: " + ", ".join(names) + "."
+
+
 def try_catalog_direct_reply(message: str) -> str | None:
     """Return a complete deterministic catalog answer when taxonomy JSON is available."""
     merged = get_storage().load_merged_catalog()
@@ -116,6 +218,12 @@ def try_catalog_direct_reply(message: str) -> str | None:
         category = _find_category_in_query(message, merged)
         if category:
             return format_subcategories_reply(merged, category)
+
+    if _is_product_count_query(message):
+        return format_product_count_reply(merged)
+
+    if _is_category_count_query(message):
+        return format_category_count_reply(merged)
 
     if _is_full_category_list_query(message):
         return format_all_categories_reply(merged)
@@ -193,6 +301,16 @@ async def handle_message(message: str, session_id: str | None = None) -> dict:
             "reply": direct,
             "session_id": session_id,
             "sources": [],
+            "ui": None,
+        }
+
+    product_ui = try_product_ui_reply(message)
+    if product_ui:
+        return {
+            "reply": product_ui["reply"],
+            "session_id": session_id,
+            "sources": [],
+            "ui": product_ui.get("ui"),
         }
 
     try:
@@ -203,6 +321,7 @@ async def handle_message(message: str, session_id: str | None = None) -> dict:
                 "reply": _EMBED_ERROR_REPLY,
                 "session_id": session_id,
                 "sources": [],
+                "ui": None,
             }
         raise
     except Exception:
@@ -210,6 +329,7 @@ async def handle_message(message: str, session_id: str | None = None) -> dict:
             "reply": "Chat is temporarily unavailable. Please try again later.",
             "session_id": session_id,
             "sources": [],
+            "ui": None,
         }
 
     if not chunks:
@@ -217,6 +337,7 @@ async def handle_message(message: str, session_id: str | None = None) -> dict:
             "reply": NO_CONTEXT_REPLY,
             "session_id": session_id,
             "sources": [],
+            "ui": None,
         }
 
     reply = await generate(message, context=chunks)
@@ -225,6 +346,7 @@ async def handle_message(message: str, session_id: str | None = None) -> dict:
         "reply": reply,
         "session_id": session_id,
         "sources": _format_sources(chunks),
+        "ui": None,
     }
 
 
@@ -237,6 +359,12 @@ async def stream_message(message: str, session_id: str | None = None):
     if direct:
         yield {"type": "token", "text": direct}
         yield {"type": "done", "sources": []}
+        return
+
+    product_ui = try_product_ui_reply(message)
+    if product_ui:
+        yield {"type": "token", "text": product_ui["reply"]}
+        yield {"type": "done", "sources": [], "ui": product_ui.get("ui")}
         return
 
     try:
