@@ -1,15 +1,13 @@
 """Admin API routes."""
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.api.deps import require_admin
+from app.services import admin as admin_service
 from app.services import knowledge as knowledge_service
-from app.storage.storage import get_storage
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 class ChatbotSettings(BaseModel):
@@ -19,26 +17,20 @@ class ChatbotSettings(BaseModel):
     logo_url: str = Field(default="", max_length=500)
 
 
-@router.get("/", response_class=HTMLResponse)
-async def admin_page(request: Request):
-    return templates.TemplateResponse("admin.html", {"request": request})
-
-
 @router.get("/settings", response_model=ChatbotSettings)
 async def get_settings():
-    storage = get_storage()
-    return ChatbotSettings(**storage.load_settings())
+    """Public branding settings for /chat."""
+    return ChatbotSettings(**admin_service.get_chatbot_settings())
 
 
 @router.put("/settings", response_model=ChatbotSettings)
-async def put_settings(payload: ChatbotSettings):
-    storage = get_storage()
-    saved = storage.save_settings(payload.model_dump())
+async def put_settings(payload: ChatbotSettings, _: str = Depends(require_admin)):
+    saved = admin_service.update_chatbot_settings(payload.model_dump())
     return ChatbotSettings(**saved)
 
 
 @router.post("/reindex")
-async def reindex():
+async def reindex(_: str = Depends(require_admin)):
     """Trigger a full re-index of the knowledge base."""
     await knowledge_service.reindex_all()
     return {"status": "reindex_complete"}

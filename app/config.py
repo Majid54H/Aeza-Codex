@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     rag_top_k: int = 5
     rag_min_score: float = 0.25
     web_fetch_timeout_seconds: int = 15
+    web_fetch_max_bytes: int = 2_000_000
+    admin_username: str = "admin"
+    admin_password: str = ""
 
     @property
     def max_upload_bytes(self) -> int:

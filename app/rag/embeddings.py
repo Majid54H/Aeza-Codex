@@ -9,9 +9,7 @@ async def embed(texts: list[str]) -> list[list[float]]:
         return []
 
     if not settings.openai_api_key:
-        # Placeholder zero vectors for local dev without API key
-        dim = 1536
-        return [[0.0] * dim for _ in texts]
+        raise RuntimeError("OPENAI_API_KEY is not configured")
 
     from openai import AsyncOpenAI
 

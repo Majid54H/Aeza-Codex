@@ -6,6 +6,11 @@ from app.config import settings
 from app.rag import embeddings, faiss
 from app.rag.generator import NO_CONTEXT_REPLY, generate
 
+_EMBED_ERROR_REPLY = (
+    "Chat is temporarily unavailable because embeddings are not configured. "
+    "Set OPENAI_API_KEY and try again."
+)
+
 
 async def _retrieve_chunks(message: str) -> list[dict]:
     """Embed the question, search FAISS, and filter by relevance score."""
@@ -14,8 +19,7 @@ async def _retrieve_chunks(message: str) -> list[dict]:
         return []
 
     hits = faiss.search(query_vectors[0], top_k=settings.rag_top_k)
-    min_score = settings.rag_min_score if settings.openai_api_key else 0.0
-    return [c for c in hits if c.get("score", 0.0) >= min_score]
+    return [c for c in hits if c.get("score", 0.0) >= settings.rag_min_score]
 
 
 def _format_sources(chunks: list[dict]) -> list[dict]:
@@ -33,7 +37,22 @@ def _format_sources(chunks: list[dict]) -> list[dict]:
 async def handle_message(message: str, session_id: str | None = None) -> dict:
     session_id = session_id or str(uuid.uuid4())
 
-    chunks = await _retrieve_chunks(message)
+    try:
+        chunks = await _retrieve_chunks(message)
+    except RuntimeError as exc:
+        if "OPENAI_API_KEY" in str(exc):
+            return {
+                "reply": _EMBED_ERROR_REPLY,
+                "session_id": session_id,
+                "sources": [],
+            }
+        raise
+    except Exception:
+        return {
+            "reply": "Chat is temporarily unavailable. Please try again later.",
+            "session_id": session_id,
+            "sources": [],
+        }
 
     if not chunks:
         return {

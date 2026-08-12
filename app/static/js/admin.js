@@ -53,9 +53,18 @@ function sourceLabel(doc) {
 async function loadDocuments() {
     const res = await fetch("/api/knowledge/documents");
     const docs = await res.json();
-    documentList.innerHTML = docs.length
-        ? docs.map((d) => `<li>${sourceLabel(d)}</li>`).join("")
-        : "<li>No knowledge sources yet.</li>";
+    documentList.replaceChildren();
+    if (!docs.length) {
+        const empty = document.createElement("li");
+        empty.textContent = "No knowledge sources yet.";
+        documentList.appendChild(empty);
+        return docs;
+    }
+    for (const d of docs) {
+        const li = document.createElement("li");
+        li.textContent = sourceLabel(d);
+        documentList.appendChild(li);
+    }
     return docs;
 }
 

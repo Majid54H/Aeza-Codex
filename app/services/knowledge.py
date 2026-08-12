@@ -4,8 +4,6 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import UploadFile
-
 from app.config import settings
 from app.ingestion import pipeline
 from app.ingestion.loader import load_web_page
@@ -29,9 +27,7 @@ def _validate_file(filename: str | None, size: int) -> str:
     return suffix
 
 
-async def ingest_document(file: UploadFile) -> dict:
-    content = await file.read()
-    filename = file.filename or "document"
+async def ingest_document(content: bytes, filename: str) -> dict:
     _validate_file(filename, len(content))
 
     document_id = str(uuid.uuid4())
