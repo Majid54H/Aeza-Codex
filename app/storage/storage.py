@@ -19,9 +19,9 @@ FAISS_INDEX_FILE = "faiss.index"
 SKIP_METADATA_FILES = {CHUNK_MAPPING_FILE, SETTINGS_FILE}
 
 DEFAULT_SETTINGS = {
-    "chatbot_name": "Aeza Codex",
-    "welcome_message": "Ask a question about this business.",
-    "primary_color": "#6366f1",
+    "chatbot_name": "",
+    "welcome_message": "",
+    "primary_color": "",
     "logo_url": "",
 }
 

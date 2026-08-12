@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="admin">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aeza Codex — Admin</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body class="admin">
     <div class="container admin-page">
         <header>
             <h1>Aeza Codex Admin</h1>
@@ -17,26 +17,46 @@
                 <h2>Dashboard</h2>
                 <div class="stat-grid">
                     <article class="stat-card">
-                        <p class="stat-label">Chatbot name</p>
-                        <p id="stat-name" class="stat-value">Aeza Codex</p>
+                        <div class="stat-card-top">
+                            <p class="stat-label">Chatbot name</p>
+                            <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8l-4 3V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <p id="stat-name" class="stat-value"></p>
                     </article>
                     <article class="stat-card">
-                        <p class="stat-label">Knowledge sources</p>
-                        <p id="stat-count" class="stat-value">0</p>
+                        <div class="stat-card-top">
+                            <p class="stat-label">Knowledge sources</p>
+                            <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v16H6.5A2.5 2.5 0 0 0 4 21.5V5.5zM20 5.5A2.5 2.5 0 0 0 17.5 3H12v16h5.5A2.5 2.5 0 0 1 20 21.5V5.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <p id="stat-count" class="stat-value"></p>
                     </article>
                     <article class="stat-card">
-                        <p class="stat-label">Status</p>
-                        <p id="stat-status" class="stat-value">No knowledge</p>
+                        <div class="stat-card-top">
+                            <p class="stat-label">Status</p>
+                            <svg class="stat-icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                                <path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <p id="stat-status" class="stat-value"></p>
                     </article>
                 </div>
             </section>
 
-            <section id="knowledge-section">
+            <section id="knowledge-section" class="panel">
                 <h2>Knowledge</h2>
                 <form id="upload-form" enctype="multipart/form-data">
                     <label for="file-input">Upload document (PDF, DOCX, TXT)</label>
                     <div class="form-row">
-                        <input type="file" id="file-input" accept=".txt,.pdf,.docx">
+                        <div class="file-picker">
+                            <input type="file" id="file-input" accept=".txt,.pdf,.docx">
+                            <label for="file-input" class="file-picker-btn">Choose File</label>
+                            <span id="file-name" class="file-name">No file chosen</span>
+                        </div>
                         <button type="submit">Upload &amp; Index</button>
                     </div>
                 </form>
@@ -56,29 +76,44 @@
                 </div>
             </section>
 
-            <section id="customize-section">
+            <section id="customize-section" class="panel">
                 <h2>Customize</h2>
                 <form id="settings-form">
-                    <label for="chatbot-name">Chatbot name</label>
-                    <input type="text" id="chatbot-name" maxlength="80" required>
+                    <div class="customize-grid">
+                        <div class="customize-col">
+                            <label for="chatbot-name">Chatbot name</label>
+                            <input type="text" id="chatbot-name" maxlength="80" required>
 
-                    <label for="welcome-message">Welcome message</label>
-                    <textarea id="welcome-message" rows="3" maxlength="300" required></textarea>
+                            <label for="welcome-message">Welcome message</label>
+                            <textarea id="welcome-message" rows="5" maxlength="300" required></textarea>
+                        </div>
+                        <div class="customize-col">
+                            <label for="primary-color">Primary color</label>
+                            <div class="form-row color-row">
+                                <input type="color" id="primary-color" value="#000000">
+                                <input type="text" id="primary-color-text" value="" maxlength="20" placeholder="#000000">
+                            </div>
 
-                    <label for="primary-color">Primary color</label>
-                    <div class="form-row">
-                        <input type="color" id="primary-color" value="#6366f1">
-                        <input type="text" id="primary-color-text" value="#6366f1" maxlength="20">
+                            <label for="logo-url">Logo URL (optional)</label>
+                            <input type="url" id="logo-url" placeholder="https://example.com/logo.png">
+                        </div>
                     </div>
-
-                    <label for="logo-url">Logo URL (optional)</label>
-                    <input type="url" id="logo-url" placeholder="https://example.com/logo.png">
-
                     <button type="submit">Save branding</button>
                 </form>
                 <p id="settings-status" class="upload-status" aria-live="polite"></p>
             </section>
         </main>
+    </div>
+    <div id="confirm-dialog" class="dialog" hidden>
+        <div class="dialog-backdrop" data-dialog-close></div>
+        <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <h2 id="confirm-title">Delete source</h2>
+            <p id="confirm-message"></p>
+            <div class="dialog-actions">
+                <button type="button" id="confirm-cancel" class="dialog-cancel">Cancel</button>
+                <button type="button" id="confirm-ok" class="source-delete">Delete</button>
+            </div>
+        </div>
     </div>
     <script src="/static/js/admin.js"></script>
 </body>

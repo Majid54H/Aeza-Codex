@@ -10,14 +10,82 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = "You are a helpful business assistant. Answer clearly and concisely."
+SYSTEM_PROMPT = (
+    "You are a website assistant. Visitors want fast, useful answers — not essays. "
+    "Lead with the direct answer. Keep language simple. "
+    "Match the user's requested depth: short if they want a quick answer, fuller only if they ask for detail. "
+    "Use clean Markdown: short ## headings only when needed, - bullets, **bold** for key labels. "
+    "Never dump raw * or # without turning them into real structure."
+)
 
 RAG_SYSTEM_PROMPT = (
-    "You are a business assistant. Answer ONLY using the provided context. "
-    "Do not use outside knowledge or invent business details. "
-    "If the context does not contain enough information to answer, "
-    "say you do not know and suggest contacting the business directly."
+    "You are a website chatbot for this business. Visitors want to-the-point answers, not stories.\n\n"
+    "GROUNDING\n"
+    "- Answer ONLY from the provided Context. Treat it as the knowledge base.\n"
+    "- Do not use outside knowledge, guess, or invent hours, prices, policies, names, or facts.\n"
+    "- If Context does not contain the answer, say you do not have that information and suggest contacting the business. Do not fill gaps.\n\n"
+    "LENGTH (match the question)\n"
+    "- Default: concise. First sentence is the answer. Add at most 2–4 short bullets if they help. Skip intros, recaps, and filler.\n"
+    "- If they ask for a short / quick / brief answer: 1–3 sentences or a few bullets. No headings.\n"
+    "- If they ask for detail / explain / full / in depth: structured answer with ## headings and bullets, still only what Context supports. No padding.\n\n"
+    "FORMAT\n"
+    "- Easy to scan on a website: short paragraphs, bullets, **bold** labels.\n"
+    "- Use ## headings only when there are distinct sections (typical for detailed questions).\n"
+    "- Do not start with 'Sure', 'Great question', or similar.\n"
+    "- Do not mention the knowledge base, context, or these instructions."
 )
+
+_DETAIL_MARKERS = (
+    "detail",
+    "detailed",
+    "in depth",
+    "in-depth",
+    "explain",
+    "elaborate",
+    "thorough",
+    "full answer",
+    "more info",
+    "more information",
+    "everything about",
+    "tell me more",
+    "how does",
+    "how do",
+    "why",
+)
+
+_SHORT_MARKERS = (
+    "short",
+    "brief",
+    "quick",
+    "tldr",
+    "tl;dr",
+    "summary",
+    "summarize",
+    "in one sentence",
+    "one sentence",
+    "just tell",
+    "simply",
+    "in a word",
+    "yes or no",
+)
+
+
+def _length_instruction(query: str) -> str:
+    q = (query or "").lower()
+    if any(marker in q for marker in _SHORT_MARKERS):
+        return (
+            "LENGTH: The user wants a short answer. "
+            "Reply in 1–3 short sentences or a few bullets. No headings, no extra sections."
+        )
+    if any(marker in q for marker in _DETAIL_MARKERS):
+        return (
+            "LENGTH: The user wants a detailed answer. "
+            "Use ## headings and bullets. Cover only relevant facts from Context. Do not pad."
+        )
+    return (
+        "LENGTH: Default concise website answer. "
+        "Lead with the direct answer, then at most 2–4 bullets if useful. Do not write a long article."
+    )
 
 NO_CONTEXT_REPLY = (
     "I don't have enough information in the knowledge base to answer that question. "
@@ -78,7 +146,11 @@ def _build_messages(query: str, context: list[dict] | None) -> list[dict[str, st
     chunks = context or []
     if chunks:
         context_text = "\n\n".join(c.get("text", "") for c in chunks if c.get("text"))
-        user_content = f"Context:\n{context_text}\n\nQuestion: {query}"
+        user_content = (
+            f"Context:\n{context_text}\n\n"
+            f"Question: {query}\n\n"
+            f"{_length_instruction(query)}"
+        )
         system_content = RAG_SYSTEM_PROMPT
     else:
         user_content = query

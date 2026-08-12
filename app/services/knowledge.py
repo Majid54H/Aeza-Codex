@@ -102,6 +102,23 @@ async def list_documents() -> list[dict]:
     return await storage.list_documents()
 
 
+async def delete_document(document_id: str) -> dict:
+    """Remove a source from storage and the FAISS index."""
+    document_id = (document_id or "").strip()
+    if not document_id:
+        raise ValueError("Document id is required")
+
+    storage = get_storage()
+    docs = await storage.list_documents()
+    match = next((d for d in docs if d.get("id") == document_id), None)
+    if match is None:
+        raise FileNotFoundError("Source not found")
+
+    await storage.delete_document(document_id)
+    faiss.remove_document(document_id)
+    return {"status": "deleted", "document_id": document_id}
+
+
 async def reindex_all() -> dict:
     """Rebuild embeddings + FAISS index for every stored document."""
     storage = get_storage()

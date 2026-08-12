@@ -77,3 +77,13 @@ async def ingest_url(payload: UrlIngestRequest, _: str = Depends(require_admin))
 @router.get("/documents")
 async def list_documents():
     return await knowledge_service.list_documents()
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(document_id: str, _: str = Depends(require_admin)):
+    try:
+        return await knowledge_service.delete_document(document_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Source not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

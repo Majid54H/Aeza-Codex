@@ -1,26 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="chat">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aeza Codex — Chat</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>Chat</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=chat-nobox">
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1 id="chat-title">Aeza Codex</h1>
-            <p id="chat-welcome">Ask questions about your knowledge base</p>
+<body class="chat">
+    <div class="chat-window">
+        <header class="chat-header">
+            <div class="chat-header-left">
+                <div id="chat-avatar" class="chat-avatar" aria-hidden="true">A</div>
+                <div>
+                    <h1 id="chat-title">Assistant</h1>
+                    <p id="chat-subtitle">Your AI Assistant</p>
+                </div>
+            </div>
         </header>
-        <main id="chat-app">
-            <div id="messages"></div>
-            <div id="loading-indicator" class="loading-indicator" aria-live="polite" aria-atomic="true"></div>
-            <form id="chat-form">
-                <input type="text" id="message-input" placeholder="Type your question..." autocomplete="off">
-                <button type="submit" id="send-button">Send</button>
-            </form>
-        </main>
+
+        <div id="messages" class="chat-messages"></div>
+        <div id="loading-indicator" class="loading-indicator" aria-live="polite" aria-atomic="true"></div>
+
+        <form id="chat-form" class="chat-composer">
+            <div class="composer-field">
+                <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off">
+                <span class="composer-emoji" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                        <circle cx="9" cy="10" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="10" r="1" fill="currentColor"/>
+                        <path d="M8.8 14.2c.9 1.2 2 1.8 3.2 1.8s2.3-.6 3.2-1.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    </svg>
+                </span>
+            </div>
+            <button type="submit" id="send-button">Send</button>
+        </form>
+        <p id="chat-disclaimer" class="chat-disclaimer">This assistant can make mistakes. Please verify important information.</p>
     </div>
-    <script src="/static/js/chat.js"></script>
+    <script src="/static/js/chat.js?v=md"></script>
 </body>
 </html>

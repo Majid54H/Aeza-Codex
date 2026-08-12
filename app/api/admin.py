@@ -11,9 +11,9 @@ router = APIRouter()
 
 
 class ChatbotSettings(BaseModel):
-    chatbot_name: str = Field(default="Aeza Codex", max_length=80)
-    welcome_message: str = Field(default="Ask a question about this business.", max_length=300)
-    primary_color: str = Field(default="#6366f1", max_length=20)
+    chatbot_name: str = Field(default="", max_length=80)
+    welcome_message: str = Field(default="", max_length=300)
+    primary_color: str = Field(default="", max_length=20)
     logo_url: str = Field(default="", max_length=500)
 
 

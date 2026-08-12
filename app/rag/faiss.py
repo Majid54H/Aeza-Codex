@@ -146,6 +146,26 @@ def search(vector: list[float], top_k: int = 5) -> list[dict]:
     return results
 
 
+def remove_document(document_id: str) -> None:
+    """Drop all vectors for a document and persist the remaining index."""
+    global _index, _mapping, _dim
+
+    keep_idx = [i for i, item in enumerate(_mapping) if item.get("document_id") != document_id]
+    if len(keep_idx) == len(_mapping):
+        return
+
+    if not keep_idx or _index is None:
+        reset()
+        return
+
+    vectors = np.vstack([_index.reconstruct(i) for i in keep_idx]).astype(np.float32)
+    new_mapping = [_mapping[i] for i in keep_idx]
+    create_index(int(vectors.shape[1]))
+    _index.add(vectors)
+    _mapping = new_mapping
+    save()
+
+
 def rebuild() -> None:
     """Clear the index for a full rebuild (used by reindex)."""
     reset()

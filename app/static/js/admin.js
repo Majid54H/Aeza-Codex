@@ -39,9 +39,72 @@ function dashboardStatus(docs) {
 }
 
 function renderDashboard(settings, docs) {
-    if (statName) statName.textContent = settings.chatbot_name || "Aeza Codex";
-    if (statCount) statCount.textContent = String(docs.length);
-    if (statStatus) statStatus.textContent = dashboardStatus(docs);
+    if (statName) statName.textContent = (settings && settings.chatbot_name) || "—";
+    if (statCount) statCount.textContent = Array.isArray(docs) ? String(docs.length) : "—";
+    if (statStatus) statStatus.textContent = Array.isArray(docs) ? dashboardStatus(docs) : "—";
+}
+
+const fileNameLabel = document.getElementById("file-name");
+
+function svgIcon(paths) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "source-icon");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    for (const attrs of paths) {
+        const el = document.createElementNS("http://www.w3.org/2000/svg", attrs.tag);
+        for (const [key, value] of Object.entries(attrs)) {
+            if (key !== "tag") el.setAttribute(key, value);
+        }
+        svg.appendChild(el);
+    }
+    return svg;
+}
+
+function fileIcon() {
+    return svgIcon([
+        {
+            tag: "path",
+            d: "M7 3.5h7l5 5V20a1.5 1.5 0 0 1-1.5 1.5h-10.5A1.5 1.5 0 0 1 5.5 20V5A1.5 1.5 0 0 1 7 3.5z",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "1.6",
+            "stroke-linejoin": "round",
+        },
+        {
+            tag: "path",
+            d: "M14 3.5V9h5.5",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "1.6",
+            "stroke-linejoin": "round",
+        },
+    ]);
+}
+
+function linkIcon() {
+    return svgIcon([
+        {
+            tag: "path",
+            d: "M10 13.5 8.5 15a3.2 3.2 0 0 1-4.5-4.5L7.5 7a3.2 3.2 0 0 1 4.5 0",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "1.6",
+            "stroke-linecap": "round",
+        },
+        {
+            tag: "path",
+            d: "M14 10.5 15.5 9a3.2 3.2 0 0 1 4.5 4.5L16.5 17a3.2 3.2 0 0 1-4.5 0",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "1.6",
+            "stroke-linecap": "round",
+        },
+    ]);
+}
+
+function setChosenFileName(name) {
+    if (fileNameLabel) fileNameLabel.textContent = name || "No file chosen";
 }
 
 function sourceLabel(doc) {
@@ -53,19 +116,86 @@ function sourceLabel(doc) {
 async function loadDocuments() {
     const res = await fetch("/api/knowledge/documents");
     const docs = await res.json();
+    const list = Array.isArray(docs) ? docs : [];
     documentList.replaceChildren();
-    if (!docs.length) {
+    if (!list.length) {
         const empty = document.createElement("li");
         empty.textContent = "No knowledge sources yet.";
         documentList.appendChild(empty);
-        return docs;
+        return list;
     }
-    for (const d of docs) {
+    for (const d of list) {
         const li = document.createElement("li");
-        li.textContent = sourceLabel(d);
+        const main = document.createElement("div");
+        main.className = "source-main";
+        main.appendChild(d.source_type === "url" ? linkIcon() : fileIcon());
+        const label = document.createElement("span");
+        label.textContent = sourceLabel(d);
+        main.appendChild(label);
+        li.appendChild(main);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "source-delete";
+        delBtn.textContent = "Delete";
+        delBtn.dataset.id = d.id || "";
+        delBtn.addEventListener("click", () => deleteSource(d));
+        li.appendChild(delBtn);
         documentList.appendChild(li);
     }
-    return docs;
+    return list;
+}
+
+const confirmDialog = document.getElementById("confirm-dialog");
+const confirmMessage = document.getElementById("confirm-message");
+const confirmCancel = document.getElementById("confirm-cancel");
+const confirmOk = document.getElementById("confirm-ok");
+let pendingDelete = null;
+
+function openConfirm(name) {
+    if (confirmMessage) {
+        confirmMessage.textContent = `Delete ${name}? This cannot be undone.`;
+    }
+    if (confirmDialog) confirmDialog.hidden = false;
+}
+
+function closeConfirm() {
+    pendingDelete = null;
+    if (confirmDialog) confirmDialog.hidden = true;
+}
+
+async function deleteSource(doc) {
+    const name = doc.filename || doc.url || doc.id || "this source";
+    if (!doc.id) {
+        setUploadStatus("Could not delete source.", true);
+        return;
+    }
+    pendingDelete = { id: doc.id, name };
+    openConfirm(name);
+}
+
+async function confirmDelete() {
+    const target = pendingDelete;
+    closeConfirm();
+    if (!target) return;
+    setUploadStatus("Deleting source...");
+    try {
+        const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(target.id)}`, {
+            method: "DELETE",
+        });
+        if (!res.ok) {
+            setUploadStatus("Could not delete source.", true);
+            return;
+        }
+        setUploadStatus(`Deleted ${target.name}.`);
+        await refresh();
+    } catch {
+        setUploadStatus("Could not delete source.", true);
+    }
+}
+
+function isHexColor(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(value || "");
 }
 
 async function loadSettings() {
@@ -73,15 +203,24 @@ async function loadSettings() {
     const settings = await res.json();
     chatbotNameInput.value = settings.chatbot_name || "";
     welcomeInput.value = settings.welcome_message || "";
-    colorInput.value = settings.primary_color || "#6366f1";
-    colorTextInput.value = settings.primary_color || "#6366f1";
+    if (isHexColor(settings.primary_color)) {
+        colorInput.value = settings.primary_color;
+        colorTextInput.value = settings.primary_color;
+    } else {
+        colorInput.value = "#000000";
+        colorTextInput.value = "";
+    }
     logoInput.value = settings.logo_url || "";
     return settings;
 }
 
 async function refresh() {
-    const [settings, docs] = await Promise.all([loadSettings(), loadDocuments()]);
-    renderDashboard(settings, docs);
+    try {
+        const [settings, docs] = await Promise.all([loadSettings(), loadDocuments()]);
+        renderDashboard(settings, docs);
+    } catch {
+        renderDashboard({}, []);
+    }
 }
 
 uploadForm.addEventListener("submit", async (e) => {
@@ -109,6 +248,7 @@ uploadForm.addEventListener("submit", async (e) => {
 
         setUploadStatus(`Indexed ${data.filename}: ${data.chunks} chunks (${data.status}).`);
         fileInput.value = "";
+        setChosenFileName("");
         await refresh();
     } catch {
         setUploadStatus("Upload failed. Please try again.", true);
@@ -192,6 +332,21 @@ settingsForm.addEventListener("submit", async (e) => {
     } catch {
         setStatus(settingsStatus, "Could not save branding.", true);
     }
+});
+
+fileInput.addEventListener("change", () => {
+    setChosenFileName(fileInput.files[0] ? fileInput.files[0].name : "");
+});
+
+if (confirmCancel) confirmCancel.addEventListener("click", closeConfirm);
+if (confirmOk) confirmOk.addEventListener("click", confirmDelete);
+if (confirmDialog) {
+    confirmDialog.addEventListener("click", (e) => {
+        if (e.target.dataset.dialogClose !== undefined) closeConfirm();
+    });
+}
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && confirmDialog && !confirmDialog.hidden) closeConfirm();
 });
 
 refresh();
