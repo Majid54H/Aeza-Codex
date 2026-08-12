@@ -44,6 +44,12 @@ header p {
     gap: 0.5rem;
 }
 
+#chat-form button:disabled,
+#chat-form button[disabled] {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 #message-input {
     flex: 1;
     padding: 0.75rem 1rem;
@@ -64,6 +70,51 @@ button {
 
 button:hover {
     background: #4f46e5;
+}
+
+/* Chat message bubbles */
+.message {
+    display: inline-block;
+    max-width: 80%;
+    padding: 0.6rem 0.8rem;
+    border-radius: 14px;
+    margin: 0.35rem 0;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.message-user {
+    background: #2563eb;
+    color: #ffffff;
+    float: right;
+}
+
+.message-assistant {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    float: left;
+}
+
+.loading-indicator {
+    display: none;
+    margin: 0.35rem 0 0.75rem;
+}
+
+.loading-indicator.active {
+    display: block;
+}
+
+.typing-dots::after {
+    content: "";
+}
+
+/* Small screens: allow bubbles to expand */
+@media (max-width: 520px) {
+    .message {
+        max-width: 100%;
+    }
 }
 
 section {

@@ -3,8 +3,8 @@
 const messagesEl = document.getElementById("messages");
 const form = document.getElementById("chat-form");
 const input = document.getElementById("message-input");
-
-let sessionId = null;
+const loadingIndicator = document.getElementById("loading-indicator");
+const sendButton = document.getElementById("send-button");
 
 function appendMessage(role, text) {
     const div = document.createElement("div");
@@ -12,6 +12,18 @@ function appendMessage(role, text) {
     div.textContent = `${role === "user" ? "You" : "Codex"}: ${text}`;
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function setLoading(isLoading) {
+    if (isLoading) {
+        if (loadingIndicator) loadingIndicator.classList.add("active");
+        if (sendButton) sendButton.disabled = true;
+        if (input) input.disabled = true;
+    } else {
+        if (loadingIndicator) loadingIndicator.classList.remove("active");
+        if (sendButton) sendButton.disabled = false;
+        if (input) input.disabled = false;
+    }
 }
 
 form.addEventListener("submit", async (e) => {
@@ -22,13 +34,36 @@ form.addEventListener("submit", async (e) => {
     appendMessage("user", message);
     input.value = "";
 
-    const res = await fetch("/api/chat/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, session_id: sessionId }),
-    });
+    setLoading(true);
 
-    const data = await res.json();
-    sessionId = data.session_id;
-    appendMessage("assistant", data.reply);
+    // Show a "typing..." bubble immediately.
+    appendMessage("assistant", "…");
+
+    try {
+        const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message }),
+        });
+
+        const data = await res.json();
+
+        // Remove the last loading bubble (the most recently appended assistant message)
+        // and replace it with the real response.
+        const last = messagesEl.lastElementChild;
+        if (last && last.classList.contains("message-assistant")) {
+            last.remove();
+        }
+
+        appendMessage("assistant", data.reply);
+    } catch (err) {
+        const last = messagesEl.lastElementChild;
+        if (last && last.classList.contains("message-assistant")) {
+            last.remove();
+        }
+        appendMessage("assistant", "Sorry, something went wrong. Please try again.");
+    } finally {
+        // Ensure UI is always restored even if the request fails.
+        setLoading(false);
+    }
 });

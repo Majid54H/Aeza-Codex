@@ -14,9 +14,10 @@
         </header>
         <main id="chat-app">
             <div id="messages"></div>
+            <div id="loading-indicator" class="loading-indicator" aria-live="polite" aria-atomic="true"></div>
             <form id="chat-form">
                 <input type="text" id="message-input" placeholder="Type your question..." autocomplete="off">
-                <button type="submit">Send</button>
+                <button type="submit" id="send-button">Send</button>
             </form>
         </main>
     </div>

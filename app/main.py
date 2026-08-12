@@ -1,12 +1,11 @@
 """Aeza Codex — FastAPI application entry point."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.api import chat, knowledge, admin
-from app.rag import faiss as faiss_index
 
 app = FastAPI(title="Aeza Codex", version="1.0.0")
 
@@ -25,18 +24,16 @@ async def health():
 
 
 @app.get("/admin")
-async def admin_page(request):
+async def admin_page(request: Request):
     """Owner/admin UI landing page."""
     return templates.TemplateResponse("admin.html", {"request": request})
 
 
 @app.get("/chat")
-async def chat_page(request):
+async def chat_page(request: Request):
     """Customer chat UI landing page."""
     return templates.TemplateResponse("chat.html", {"request": request})
 
 
-@app.on_event("startup")
-async def startup():
-    # Load FAISS index from disk if present (development/local only).
-    faiss_index.load()
+## Phase 1: FastAPI foundation only
+## (No RAG/FAISS/index loading or ingestion in this phase.)

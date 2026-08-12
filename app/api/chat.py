@@ -19,7 +19,7 @@ class ChatResponse(BaseModel):
     sources: list[dict] = []
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     result = await chat_service.handle_message(
         message=request.message,
