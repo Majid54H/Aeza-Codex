@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aeza Codex — Admin</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Admin Panel</h1>
+            <p>Manage documents and re-index the knowledge base</p>
+        </header>
+        <main>
+            <section id="upload-section">
+                <h2>Upload Document</h2>
+                <form id="upload-form" enctype="multipart/form-data">
+                    <input type="file" id="file-input" accept=".txt,.md,.pdf">
+                    <button type="submit">Upload &amp; Index</button>
+                </form>
+            </section>
+            <section id="documents-section">
+                <h2>Documents</h2>
+                <ul id="document-list"></ul>
+            </section>
+            <section id="actions-section">
+                <button id="reindex-btn">Re-index All</button>
+            </section>
+        </main>
+    </div>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+/* Aeza Codex — base styles */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+header h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.75rem;
+}
+
+header p {
+    margin: 0 0 1.5rem;
+    color: #94a3b8;
+}
+
+#messages {
+    min-height: 320px;
+    padding: 1rem;
+    background: #1e293b;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow-y: auto;
+}
+
+#chat-form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+#message-input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    background: #1e293b;
+    color: inherit;
+}
+
+button {
+    padding: 0.75rem 1.25rem;
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #4f46e5;
+}
+
+section {
+    margin-bottom: 2rem;
+}
+
+#document-list {
+    list-style: none;
+    padding: 0;
+}
+
+#document-list li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #334155;
+}
