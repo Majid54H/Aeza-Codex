@@ -16,9 +16,10 @@
             <section id="upload-section">
                 <h2>Upload Document</h2>
                 <form id="upload-form" enctype="multipart/form-data">
-                    <input type="file" id="file-input" accept=".txt,.md,.pdf">
+                    <input type="file" id="file-input" accept=".txt,.pdf,.docx">
                     <button type="submit">Upload &amp; Index</button>
                 </form>
+                <p id="upload-status" class="upload-status" aria-live="polite"></p>
             </section>
             <section id="documents-section">
                 <h2>Documents</h2>

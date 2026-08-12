@@ -7,6 +7,8 @@ from pathlib import Path
 
 from app.config import settings
 
+CHUNK_MAPPING_FILE = "chunk_mapping.json"
+
 
 def _sanitize_filename(filename: str) -> str:
     # Avoid directory traversal / invalid filenames on Windows.
@@ -36,6 +38,14 @@ class StorageBackend(ABC):
     async def load_document(self, document_id: str) -> bytes:
         ...
 
+    @abstractmethod
+    def save_chunk_mapping(self, mapping: list[dict]) -> None:
+        ...
+
+    @abstractmethod
+    def load_chunk_mapping(self) -> list[dict]:
+        ...
+
 
 class LocalStorage(StorageBackend):
     def __init__(self, base_dir: Path):
@@ -56,13 +66,13 @@ class LocalStorage(StorageBackend):
     async def list_documents(self) -> list[dict]:
         docs = []
         for meta_file in self.metadata_dir.glob("*.json"):
+            if meta_file.name == CHUNK_MAPPING_FILE:
+                continue
             data = json.loads(meta_file.read_text(encoding="utf-8"))
             docs.append({"id": meta_file.stem, **data})
         return docs
 
     async def load_document(self, document_id: str) -> bytes:
-        # Documents are stored as: <document_id>_<filename>
-        # For re-indexing we don't depend on the original filename, we just locate by prefix.
         prefix = f"{document_id}_"
         candidates = sorted(
             self.documents_dir.glob(prefix + "*"),
@@ -72,6 +82,19 @@ class LocalStorage(StorageBackend):
         if not candidates:
             raise FileNotFoundError(f"Document not found: {document_id}")
         return candidates[0].read_bytes()
+
+    def save_chunk_mapping(self, mapping: list[dict]) -> None:
+        path = self.metadata_dir / CHUNK_MAPPING_FILE
+        path.write_text(json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def load_chunk_mapping(self) -> list[dict]:
+        path = self.metadata_dir / CHUNK_MAPPING_FILE
+        if not path.exists():
+            return []
+        try:
+            return json.loads(path.read_text(encoding="utf-8")) or []
+        except (json.JSONDecodeError, OSError):
+            return []
 
 
 def get_storage() -> StorageBackend:

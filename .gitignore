@@ -19,5 +19,5 @@ data/metadata/*
 
 # FAISS artifacts (redundant with data/indexes/* but explicit for clarity)
 data/indexes/faiss.index
-data/indexes/faiss_mapping.json
+data/metadata/chunk_mapping.json
 

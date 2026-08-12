@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import faiss  # type: ignore
 import numpy as np
 
 from app.config import settings
-from app.rag import embeddings
+from app.storage.storage import get_storage
 
 _index_path = settings.data_dir / "indexes" / "faiss.index"
-_mapping_path = settings.data_dir / "indexes" / "faiss_mapping.json"
 
 # In-memory state (reconstructed from disk on startup)
 _index: Any | None = None
@@ -27,23 +25,39 @@ def _normalize(v: np.ndarray) -> np.ndarray:
     return v / norms
 
 
+def _storage():
+    return get_storage()
+
+
+def create_index(dim: int) -> None:
+    """Create a new FAISS index with the given embedding dimension."""
+    global _index, _dim
+    _index = faiss.IndexFlatIP(dim)
+    _dim = dim
+
+
 def reset() -> None:
-    """Reset index + mapping (and remove persisted files)."""
+    """Clear in-memory index, mapping, and persisted index file."""
     global _index, _mapping, _dim
     _index = None
     _mapping = []
     _dim = None
 
-    if settings.environment == "development":
-        for p in (_index_path, _mapping_path):
-            try:
-                p.unlink()
-            except FileNotFoundError:
-                pass
+    try:
+        _index_path.unlink()
+    except FileNotFoundError:
+        pass
+
+    _storage().save_chunk_mapping([])
 
 
-def add(document_id: str, chunks: list[dict], vectors: list[list[float]]) -> None:
-    """Add chunk vectors to the FAISS index and persist to disk."""
+def add(
+    document_id: str,
+    chunks: list[dict],
+    vectors: list[list[float]],
+    filename: str = "",
+) -> None:
+    """Add chunk vectors to the FAISS index and persist."""
     global _index, _dim, _mapping
 
     if not chunks or not vectors:
@@ -54,81 +68,83 @@ def add(document_id: str, chunks: list[dict], vectors: list[list[float]]) -> Non
         raise ValueError("Vectors must be a 2D array")
 
     dim = int(vecs.shape[1])
-    _dim = dim
+    if _index is None:
+        create_index(dim)
+    elif _dim != dim:
+        raise ValueError(f"Embedding dimension mismatch: expected {_dim}, got {dim}")
 
     vecs = _normalize(vecs)
-
-    if _index is None:
-        _index = faiss.IndexFlatIP(dim)
-
-    # Add vectors first; then store metadata in the same order.
     _index.add(vecs)
 
     for chunk in chunks:
-        # Store only metadata needed by chat UI/generator.
         _mapping.append(
             {
                 "document_id": document_id,
                 "chunk_index": chunk.get("chunk_index"),
                 "text": chunk.get("text", ""),
+                "filename": filename,
             }
         )
 
-    _persist()
+    save()
 
 
-async def search(query: str, top_k: int = 5) -> list[dict]:
-    """Semantic search: embed query, run FAISS similarity, return top chunks."""
-    if _index is None or not _mapping:
-        return []
-
-    vecs = await embeddings.embed([query])
-    if not vecs:
-        return []
-
-    q = np.asarray(vecs, dtype=np.float32)
-    q = _normalize(q)
-
-    scores, ids = _index.search(q, top_k)
-    # ids shape: (1, top_k)
-    results: list[dict] = []
-    for score, idx in zip(scores[0].tolist(), ids[0].tolist()):
-        if idx < 0:
-            continue
-        meta = _mapping[idx] if idx < len(_mapping) else None
-        if not meta:
-            continue
-        results.append({**meta, "score": float(score)})
-
-    return results
-
-
-def _persist() -> None:
-    """Persist FAISS index + metadata mapping to disk (local dev only)."""
-    if settings.environment != "development":
-        return
+def save() -> None:
+    """Persist FAISS index (vectors only) and chunk mapping (metadata)."""
     if _index is None:
         return
 
     _index_path.parent.mkdir(parents=True, exist_ok=True)
     faiss.write_index(_index, str(_index_path))
-    with _mapping_path.open("w", encoding="utf-8") as f:
-        json.dump(_mapping, f, ensure_ascii=False, indent=2)
+    _storage().save_chunk_mapping(_mapping)
 
 
 def load() -> None:
-    """Load FAISS index + mapping from disk on startup."""
+    """Load FAISS index and chunk mapping from disk. Safe if files are missing."""
     global _index, _mapping, _dim
 
-    if not _index_path.exists() or not _mapping_path.exists():
+    _mapping = _storage().load_chunk_mapping()
+
+    if not _index_path.exists():
+        _index = None
+        _dim = None
         return
 
-    _index = faiss.read_index(str(_index_path))
-    _dim = int(_index.d)
+    try:
+        _index = faiss.read_index(str(_index_path))
+        _dim = int(_index.d)
+    except Exception:
+        _index = None
+        _dim = None
+        _mapping = []
+        return
 
-    with _mapping_path.open("r", encoding="utf-8") as f:
-        _mapping = json.load(f) or []
-
-    # If the mapping and index diverged, prefer the index and clamp the mapping.
     if len(_mapping) > _index.ntotal:
         _mapping = _mapping[: _index.ntotal]
+
+
+def search(vector: list[float], top_k: int = 5) -> list[dict]:
+    """Search by embedding vector and return matching chunk metadata + scores."""
+    if _index is None or not _mapping or _index.ntotal == 0:
+        return []
+
+    q = np.asarray([vector], dtype=np.float32)
+    q = _normalize(q)
+
+    k = min(top_k, _index.ntotal)
+    scores, ids = _index.search(q, k)
+
+    results: list[dict] = []
+    for score, idx in zip(scores[0].tolist(), ids[0].tolist()):
+        if idx < 0:
+            continue
+        if idx >= len(_mapping):
+            continue
+        results.append({**_mapping[idx], "score": float(score)})
+
+    return results
+
+
+def rebuild() -> None:
+    """Clear the index for a full rebuild (used by reindex)."""
+    reset()

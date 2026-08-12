@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.api import chat, knowledge, admin
+from app.rag import faiss as faiss_index
 
 app = FastAPI(title="Aeza Codex", version="1.0.0")
 
@@ -35,5 +36,6 @@ async def chat_page(request: Request):
     return templates.TemplateResponse("chat.html", {"request": request})
 
 
-## Phase 1: FastAPI foundation only
-## (No RAG/FAISS/index loading or ingestion in this phase.)
+@app.on_event("startup")
+async def startup():
+    faiss_index.load()

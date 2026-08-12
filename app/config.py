@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     chat_model: str = "gpt-4o-mini"
     data_dir: Path = Path("data")
+    max_upload_size_mb: int = 10
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_size_mb * 1024 * 1024
 
     class Config:
         env_file = ".env"

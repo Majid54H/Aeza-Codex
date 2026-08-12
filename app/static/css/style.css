@@ -130,3 +130,17 @@ section {
     padding: 0.5rem 0;
     border-bottom: 1px solid #334155;
 }
+
+.upload-status {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: #94a3b8;
+}
+
+.upload-status.success {
+    color: #86efac;
+}
+
+.upload-status.error {
+    color: #fca5a5;
+}
