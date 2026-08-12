@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" class="chat">
+<html lang="en" class="chat{% if embed %} embed{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=chat-nobox">
+    <link rel="stylesheet" href="/static/css/style.css?v=5">
 </head>
-<body class="chat">
+<body class="chat{% if embed %} embed{% endif %}">
     <div class="chat-window">
         <header class="chat-header">
             <div class="chat-header-left">
@@ -18,25 +18,31 @@
             </div>
         </header>
 
-        <div id="messages" class="chat-messages"></div>
+        <div id="messages" class="chat-messages">
+            <div id="welcome-panel" class="welcome-panel">
+                <p class="welcome-kicker">Answers from this business knowledge base</p>
+                <h2 id="welcome-heading">Hi, how can I help?</h2>
+                <p id="welcome-copy" class="welcome-copy"></p>
+                <p class="welcome-hint">Ask a short question for a quick answer. Ask for detail only when you need it.</p>
+                <div class="welcome-chips">
+                    <button type="button" class="welcome-chip" data-prompt="What are your hours?">Hours</button>
+                    <button type="button" class="welcome-chip" data-prompt="What products or services do you offer?">Services</button>
+                    <button type="button" class="welcome-chip" data-prompt="What are your prices?">Pricing</button>
+                    <button type="button" class="welcome-chip" data-prompt="How can I contact you?">Contact</button>
+                </div>
+            </div>
+        </div>
         <div id="loading-indicator" class="loading-indicator" aria-live="polite" aria-atomic="true"></div>
 
         <form id="chat-form" class="chat-composer">
             <div class="composer-field">
                 <input type="text" id="message-input" placeholder="Type your message..." autocomplete="off">
-                <span class="composer-emoji" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.6"/>
-                        <circle cx="9" cy="10" r="1" fill="currentColor"/>
-                        <circle cx="15" cy="10" r="1" fill="currentColor"/>
-                        <path d="M8.8 14.2c.9 1.2 2 1.8 3.2 1.8s2.3-.6 3.2-1.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                    </svg>
-                </span>
             </div>
             <button type="submit" id="send-button">Send</button>
         </form>
         <p id="chat-disclaimer" class="chat-disclaimer">This assistant can make mistakes. Please verify important information.</p>
+        <p class="chat-powered">Powered by DuaxSoft</p>
     </div>
-    <script src="/static/js/chat.js?v=md"></script>
+    <script src="/static/js/chat.js?v=4"></script>
 </body>
 </html>

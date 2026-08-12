@@ -102,6 +102,25 @@
                 </form>
                 <p id="settings-status" class="upload-status" aria-live="polite"></p>
             </section>
+
+            <section id="embed-section" class="panel">
+                <h2>Embed on a website</h2>
+                <p class="hint">Paste this on any page. Change width and height to resize the chat.</p>
+                <div class="customize-grid">
+                    <div class="customize-col">
+                        <label for="embed-width">Width</label>
+                        <input type="text" id="embed-width" value="380px">
+                    </div>
+                    <div class="customize-col">
+                        <label for="embed-height">Height</label>
+                        <input type="text" id="embed-height" value="640px">
+                    </div>
+                </div>
+                <label for="embed-code">Embed code</label>
+                <textarea id="embed-code" rows="4" readonly></textarea>
+                <button type="button" id="copy-embed">Copy embed code</button>
+                <p id="embed-status" class="upload-status" aria-live="polite"></p>
+            </section>
         </main>
     </div>
     <div id="confirm-dialog" class="dialog" hidden>

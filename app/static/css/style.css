@@ -606,8 +606,10 @@ body.admin input[type="color"] {
     cursor: pointer;
 }
 
-body.admin #customize-section button[type="submit"] {
-    margin-top: 0.25rem;
+body.admin #embed-code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.82rem;
+    min-height: 6rem;
 }
 
 @media (max-width: 640px) {
@@ -629,6 +631,8 @@ body.admin #customize-section button[type="submit"] {
 /* Chat UI — light messenger layout */
 html.chat,
 body.chat {
+    width: 100%;
+    height: 100%;
     scrollbar-width: thin;
     scrollbar-color: rgba(44, 44, 44, 0.2) transparent;
     background: #FFFFFF;
@@ -655,7 +659,8 @@ body.chat .chat-messages::-webkit-scrollbar-thumb {
 }
 
 body.chat {
-    min-height: 100vh;
+    min-height: 100%;
+    height: 100%;
     margin: 0;
     background: #FFFFFF;
     color: #000000;
@@ -668,13 +673,39 @@ body.chat {
 
 body.chat .chat-window {
     width: min(760px, 100%);
-    height: min(860px, calc(100vh - 2.5rem));
+    height: min(860px, calc(100% - 2.5rem));
+    min-width: 280px;
+    min-height: 420px;
     background: #FFFFFF;
     border: 1px solid #E4E4E4;
     border-radius: 16px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    resize: both;
+}
+
+html.chat.embed,
+body.chat.embed {
+    height: 100%;
+    width: 100%;
+}
+
+body.chat.embed {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+}
+
+body.chat.embed .chat-window {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    border: none;
+    border-radius: 0;
+    resize: none;
 }
 
 body.chat .chat-header {
@@ -885,8 +916,19 @@ body.chat .message-assistant strong {
     font-weight: 700;
 }
 
-body.chat .message-assistant em {
-    color: #2C2C2C;
+body.chat .message-assistant.is-streaming::after {
+    content: "";
+    display: inline-block;
+    width: 0.45rem;
+    height: 0.9em;
+    margin-left: 0.15rem;
+    background: #FFAB00;
+    vertical-align: text-bottom;
+    animation: chat-caret 0.9s step-end infinite;
+}
+
+@keyframes chat-caret {
+    50% { opacity: 0; }
 }
 
 body.chat .message-assistant code {
@@ -958,23 +1000,23 @@ body.chat .loading-indicator {
 
 body.chat .chat-composer {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 0.55rem;
     padding: 0.85rem 1.1rem 0.45rem;
     border-top: 1px solid #EDEDED;
 }
 
 body.chat .composer-field {
-    position: relative;
     flex: 1;
     min-width: 0;
+    display: flex;
 }
 
 body.chat .composer-field input,
 body.chat #message-input {
     width: 100%;
-    flex: 1;
-    padding: 0.7rem 2.4rem 0.7rem 0.95rem;
+    height: 44px;
+    padding: 0 0.95rem;
     border: 1px solid #E4E4E4;
     border-radius: 10px;
     background: #FFFFFF;
@@ -987,23 +1029,9 @@ body.chat #message-input:focus {
     outline-offset: 1px;
 }
 
-body.chat .composer-emoji {
-    position: absolute;
-    right: 0.7rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #2C2C2C;
-    pointer-events: none;
-    display: flex;
-}
-
-body.chat .composer-emoji svg {
-    width: 18px;
-    height: 18px;
-}
-
 body.chat #send-button {
-    padding: 0.7rem 1.15rem;
+    height: 44px;
+    padding: 0 1.15rem;
     background: #FFAB00;
     color: #000000;
     border: none;
@@ -1023,23 +1051,97 @@ body.chat #send-button:disabled {
 }
 
 body.chat .chat-disclaimer {
-    margin: 0 1.1rem 0.85rem;
+    margin: 0 1.1rem 0.15rem;
     text-align: center;
     font-size: 0.72rem;
     color: #8A8A8A;
 }
 
+body.chat .chat-powered {
+    margin: 0 1.1rem 0.75rem;
+    text-align: center;
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: #C4C4C4;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    user-select: none;
+}
+
+body.chat .welcome-panel {
+    max-width: 28rem;
+    margin: 1.5rem auto 0;
+    padding: 0.25rem 0.25rem 1rem;
+}
+
+body.chat .welcome-kicker {
+    margin: 0 0 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #FFAB00;
+}
+
+body.chat .welcome-panel h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #000000;
+    line-height: 1.25;
+}
+
+body.chat .welcome-copy {
+    margin: 0 0 0.55rem;
+    font-size: 0.95rem;
+    color: #2C2C2C;
+    line-height: 1.45;
+}
+
+body.chat .welcome-hint {
+    margin: 0 0 1rem;
+    font-size: 0.85rem;
+    color: #8A8A8A;
+    line-height: 1.4;
+}
+
+body.chat .welcome-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+body.chat .welcome-chip {
+    height: auto;
+    padding: 0.4rem 0.75rem;
+    background: #FFFFFF;
+    color: #000000;
+    border: 1px solid #E4E4E4;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+body.chat .welcome-chip:hover {
+    background: #FFAB00;
+    border-color: #FFAB00;
+    filter: none;
+}
+
 @media (max-width: 520px) {
-    body.chat {
+    body.chat:not(.embed) {
         padding: 0;
         align-items: stretch;
     }
 
-    body.chat .chat-window {
+    body.chat:not(.embed) .chat-window {
         width: 100%;
-        height: 100vh;
+        height: 100%;
+        min-width: 0;
         border: none;
         border-radius: 0;
+        resize: none;
     }
 
     body.chat .msg-stack {

@@ -8,6 +8,9 @@ const sendButton = document.getElementById("send-button");
 const chatTitle = document.getElementById("chat-title");
 const chatAvatar = document.getElementById("chat-avatar");
 const chatDisclaimer = document.getElementById("chat-disclaimer");
+const welcomePanel = document.getElementById("welcome-panel");
+const welcomeHeading = document.getElementById("welcome-heading");
+const welcomeCopy = document.getElementById("welcome-copy");
 
 let sessionId = null;
 let botName = "Assistant";
@@ -182,6 +185,67 @@ function appendMessage(role, text) {
     return row;
 }
 
+function startAssistantMessage() {
+    if (!messagesEl) return null;
+    ensureDateDivider();
+
+    const row = document.createElement("div");
+    row.className = "msg-row msg-row-assistant";
+
+    const avatar = document.createElement("div");
+    avatar.className = "msg-avatar";
+    avatar.textContent = initialFor(botName);
+    row.appendChild(avatar);
+
+    const stack = document.createElement("div");
+    stack.className = "msg-stack";
+
+    const bubble = document.createElement("div");
+    bubble.className = "message message-assistant is-streaming";
+    stack.appendChild(bubble);
+
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
+    const time = document.createElement("span");
+    time.textContent = formatTime();
+    meta.appendChild(time);
+    stack.appendChild(meta);
+
+    row.appendChild(stack);
+    messagesEl.appendChild(row);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+}
+
+function updateAssistantMessage(bubble, text) {
+    if (!bubble) return;
+    bubble.replaceChildren();
+    renderMarkdown(bubble, text);
+    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function readChatStream(res, onEvent) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+        for (const part of parts) {
+            const line = part.split("\n").find((l) => l.startsWith("data: "));
+            if (!line) continue;
+            try {
+                onEvent(JSON.parse(line.slice(6)));
+            } catch {
+                // skip malformed chunk
+            }
+        }
+    }
+}
+
 function showTyping() {
     if (!messagesEl) return;
     ensureDateDivider();
@@ -223,8 +287,12 @@ async function applyBranding() {
         if (chatDisclaimer) {
             chatDisclaimer.textContent = `${botName} can make mistakes. Please verify important information.`;
         }
-        if (settings.welcome_message) {
-            appendMessage("assistant", settings.welcome_message);
+        if (welcomeHeading) {
+            welcomeHeading.textContent = `Hi, I'm ${botName}`;
+        }
+        if (welcomeCopy) {
+            welcomeCopy.textContent = settings.welcome_message || "";
+            welcomeCopy.hidden = !settings.welcome_message;
         }
     } catch {
         setAvatar(botName, "");
@@ -244,6 +312,14 @@ function setLoading(isLoading) {
     }
 }
 
+document.querySelectorAll(".welcome-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+        if (!input || sendButton.disabled) return;
+        input.value = chip.dataset.prompt || chip.textContent || "";
+        form.requestSubmit();
+    });
+});
+
 applyBranding();
 
 form.addEventListener("submit", async (e) => {
@@ -251,20 +327,52 @@ form.addEventListener("submit", async (e) => {
     const message = input.value.trim();
     if (!message || sendButton.disabled) return;
 
+    if (welcomePanel) welcomePanel.hidden = true;
+
     appendMessage("user", message);
     input.value = "";
-    setLoading(true);
+    if (sendButton) sendButton.disabled = true;
+    if (loadingIndicator) loadingIndicator.classList.add("active");
+    showTyping();
+
+    let bubble = null;
+    let fullText = "";
 
     try {
-        const res = await fetch("/api/chat", {
+        const res = await fetch("/api/chat/stream", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ message, session_id: sessionId }),
         });
-        const data = await res.json();
-        if (data.session_id) sessionId = data.session_id;
-        hideTyping();
-        appendMessage("assistant", data.reply || "Sorry, something went wrong. Please try again.");
+        if (!res.ok || !res.body) {
+            throw new Error("stream failed");
+        }
+        await readChatStream(res, (event) => {
+            if (event.type === "meta" && event.session_id) {
+                sessionId = event.session_id;
+            }
+            if (event.type === "token" && event.text) {
+                if (!bubble) {
+                    hideTyping();
+                    bubble = startAssistantMessage();
+                }
+                fullText += event.text;
+                updateAssistantMessage(bubble, fullText);
+            }
+            if (event.type === "error") {
+                if (!bubble) {
+                    hideTyping();
+                    bubble = startAssistantMessage();
+                }
+                updateAssistantMessage(bubble, event.text || "Sorry, something went wrong. Please try again.");
+            }
+        });
+        if (!fullText) {
+            hideTyping();
+            if (!bubble) bubble = startAssistantMessage();
+            updateAssistantMessage(bubble, "Sorry, something went wrong. Please try again.");
+        }
+        if (bubble) bubble.classList.remove("is-streaming");
     } catch {
         hideTyping();
         appendMessage("assistant", "Sorry, something went wrong. Please try again.");

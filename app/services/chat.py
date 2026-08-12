@@ -4,7 +4,7 @@ import uuid
 
 from app.config import settings
 from app.rag import embeddings, faiss
-from app.rag.generator import NO_CONTEXT_REPLY, generate
+from app.rag.generator import NO_CONTEXT_REPLY, generate, generate_stream
 
 _EMBED_ERROR_REPLY = (
     "Chat is temporarily unavailable because embeddings are not configured. "
@@ -68,3 +68,31 @@ async def handle_message(message: str, session_id: str | None = None) -> dict:
         "session_id": session_id,
         "sources": _format_sources(chunks),
     }
+
+
+async def stream_message(message: str, session_id: str | None = None):
+    """Yield SSE-ready dicts: meta, token, done (or error)."""
+    session_id = session_id or str(uuid.uuid4())
+    yield {"type": "meta", "session_id": session_id}
+
+    try:
+        chunks = await _retrieve_chunks(message)
+    except RuntimeError as exc:
+        if "OPENAI_API_KEY" in str(exc):
+            yield {"type": "token", "text": _EMBED_ERROR_REPLY}
+            yield {"type": "done"}
+            return
+        raise
+    except Exception:
+        yield {"type": "token", "text": "Chat is temporarily unavailable. Please try again later."}
+        yield {"type": "done"}
+        return
+
+    if not chunks:
+        yield {"type": "token", "text": NO_CONTEXT_REPLY}
+        yield {"type": "done"}
+        return
+
+    async for piece in generate_stream(message, context=chunks):
+        yield {"type": "token", "text": piece}
+    yield {"type": "done", "sources": _format_sources(chunks)}

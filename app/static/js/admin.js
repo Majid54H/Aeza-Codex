@@ -350,3 +350,44 @@ document.addEventListener("keydown", (e) => {
 });
 
 refresh();
+
+function embedSnippet(width, height) {
+    const origin = window.location.origin;
+    const w = (width || "380px").trim() || "380px";
+    const h = (height || "640px").trim() || "640px";
+    return (
+        `<iframe src="${origin}/chat?embed=1" title="Chat" ` +
+        `style="width:${w};height:${h};max-width:100%;border:0;border-radius:16px;"></iframe>`
+    );
+}
+
+function refreshEmbedCode() {
+    const code = document.getElementById("embed-code");
+    const width = document.getElementById("embed-width");
+    const height = document.getElementById("embed-height");
+    if (!code) return;
+    code.value = embedSnippet(width && width.value, height && height.value);
+}
+
+const embedWidth = document.getElementById("embed-width");
+const embedHeight = document.getElementById("embed-height");
+const copyEmbed = document.getElementById("copy-embed");
+const embedStatus = document.getElementById("embed-status");
+
+if (embedWidth) embedWidth.addEventListener("input", refreshEmbedCode);
+if (embedHeight) embedHeight.addEventListener("input", refreshEmbedCode);
+refreshEmbedCode();
+
+if (copyEmbed) {
+    copyEmbed.addEventListener("click", async () => {
+        const code = document.getElementById("embed-code");
+        if (!code) return;
+        try {
+            await navigator.clipboard.writeText(code.value);
+            setStatus(embedStatus, "Embed code copied.");
+        } catch {
+            code.select();
+            setStatus(embedStatus, "Select the code and copy it.", true);
+        }
+    });
+}

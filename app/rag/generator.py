@@ -130,6 +130,27 @@ class OpenAIProvider(LLMProvider):
         content = message.content
         return content.strip() if content else ""
 
+    async def generate_stream(self, messages: list[dict[str, str]]):
+        from openai import AsyncOpenAI
+
+        kwargs: dict[str, Any] = {"api_key": self.api_key}
+        if self.base_url:
+            kwargs["base_url"] = self.base_url
+        client = AsyncOpenAI(**kwargs)
+        stream = await client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=settings.chat_max_tokens,
+            stream=True,
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            piece = getattr(delta, "content", None) or ""
+            if piece:
+                yield piece
+
 
 def get_llm_provider() -> LLMProvider | None:
     """Return the configured LLM provider, or None if not configured."""
@@ -160,6 +181,26 @@ def _build_messages(query: str, context: list[dict] | None) -> list[dict[str, st
         {"role": "system", "content": system_content},
         {"role": "user", "content": user_content},
     ]
+
+
+async def generate_stream(query: str, context: list[dict] | None = None):
+    """Yield reply text pieces as the model produces them."""
+    provider = get_llm_provider()
+    if provider is None:
+        yield MISSING_KEY_REPLY
+        return
+
+    messages = _build_messages(query, context)
+    try:
+        produced = False
+        async for piece in provider.generate_stream(messages):
+            produced = True
+            yield piece
+        if not produced:
+            yield FALLBACK_REPLY
+    except Exception as exc:
+        logger.warning("LLM stream failed: %s", exc.__class__.__name__)
+        yield FALLBACK_REPLY
 
 
 async def generate(query: str, context: list[dict] | None = None) -> str:

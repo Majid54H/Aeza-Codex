@@ -3,6 +3,7 @@
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.responses import Response
 
 from app.api import admin, chat, knowledge
 from app.api.deps import require_admin
@@ -11,7 +12,23 @@ from app.rag import faiss as faiss_index
 
 app = FastAPI(title="Aeza Codex", version="1.0.0")
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+class DevStaticFiles(StaticFiles):
+    """Avoid stale CSS/JS in local development (no 304 cache)."""
+
+    def is_not_modified(self, *args, **kwargs) -> bool:
+        if settings.environment == "development":
+            return False
+        return super().is_not_modified(*args, **kwargs)
+
+    def file_response(self, *args, **kwargs) -> Response:
+        response = super().file_response(*args, **kwargs)
+        if settings.environment == "development":
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+
+app.mount("/static", DevStaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -32,9 +49,15 @@ async def admin_page(request: Request, _: str = Depends(require_admin)):
 
 
 @app.get("/chat")
-async def chat_page(request: Request):
-    """Customer chat UI landing page."""
-    return templates.TemplateResponse("chat.html", {"request": request})
+async def chat_page(request: Request, embed: str = ""):
+    """Customer chat UI. Use ?embed=1 to fill the parent iframe size."""
+    return templates.TemplateResponse(
+        "chat.html",
+        {
+            "request": request,
+            "embed": embed.lower() in {"1", "true", "yes"},
+        },
+    )
 
 
 @app.on_event("startup")
