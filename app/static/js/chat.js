@@ -5,6 +5,31 @@ const form = document.getElementById("chat-form");
 const input = document.getElementById("message-input");
 const loadingIndicator = document.getElementById("loading-indicator");
 const sendButton = document.getElementById("send-button");
+const chatTitle = document.getElementById("chat-title");
+const chatWelcome = document.getElementById("chat-welcome");
+
+async function applyBranding() {
+    try {
+        const res = await fetch("/api/admin/settings");
+        if (!res.ok) return;
+        const settings = await res.json();
+        if (chatTitle && settings.chatbot_name) {
+            chatTitle.textContent = settings.chatbot_name;
+            document.title = `${settings.chatbot_name} — Chat`;
+        }
+        if (chatWelcome && settings.welcome_message) {
+            chatWelcome.textContent = settings.welcome_message;
+        }
+        if (settings.primary_color) {
+            document.documentElement.style.setProperty("--primary-color", settings.primary_color);
+            if (sendButton) sendButton.style.background = settings.primary_color;
+        }
+    } catch {
+        // Keep default branding if settings cannot be loaded.
+    }
+}
+
+applyBranding();
 
 function appendMessage(role, text) {
     const div = document.createElement("div");

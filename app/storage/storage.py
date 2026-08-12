@@ -8,6 +8,15 @@ from pathlib import Path
 from app.config import settings
 
 CHUNK_MAPPING_FILE = "chunk_mapping.json"
+SETTINGS_FILE = "admin_settings.json"
+SKIP_METADATA_FILES = {CHUNK_MAPPING_FILE, SETTINGS_FILE}
+
+DEFAULT_SETTINGS = {
+    "chatbot_name": "Aeza Codex",
+    "welcome_message": "Ask a question about this business.",
+    "primary_color": "#6366f1",
+    "logo_url": "",
+}
 
 
 def _sanitize_filename(filename: str) -> str:
@@ -46,6 +55,14 @@ class StorageBackend(ABC):
     def load_chunk_mapping(self) -> list[dict]:
         ...
 
+    @abstractmethod
+    def load_settings(self) -> dict:
+        ...
+
+    @abstractmethod
+    def save_settings(self, data: dict) -> dict:
+        ...
+
 
 class LocalStorage(StorageBackend):
     def __init__(self, base_dir: Path):
@@ -66,7 +83,7 @@ class LocalStorage(StorageBackend):
     async def list_documents(self) -> list[dict]:
         docs = []
         for meta_file in self.metadata_dir.glob("*.json"):
-            if meta_file.name == CHUNK_MAPPING_FILE:
+            if meta_file.name in SKIP_METADATA_FILES:
                 continue
             data = json.loads(meta_file.read_text(encoding="utf-8"))
             docs.append({"id": meta_file.stem, **data})
@@ -95,6 +112,27 @@ class LocalStorage(StorageBackend):
             return json.loads(path.read_text(encoding="utf-8")) or []
         except (json.JSONDecodeError, OSError):
             return []
+
+    def load_settings(self) -> dict:
+        path = self.metadata_dir / SETTINGS_FILE
+        if not path.exists():
+            return dict(DEFAULT_SETTINGS)
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+        except (json.JSONDecodeError, OSError):
+            return dict(DEFAULT_SETTINGS)
+        merged = dict(DEFAULT_SETTINGS)
+        merged.update({k: data[k] for k in DEFAULT_SETTINGS if k in data})
+        return merged
+
+    def save_settings(self, data: dict) -> dict:
+        merged = self.load_settings()
+        for key in DEFAULT_SETTINGS:
+            if key in data and data[key] is not None:
+                merged[key] = data[key]
+        path = self.metadata_dir / SETTINGS_FILE
+        path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+        return merged
 
 
 def get_storage() -> StorageBackend:

@@ -2,6 +2,7 @@
 
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import UploadFile
 
@@ -46,6 +47,38 @@ async def ingest_document(file: UploadFile) -> dict:
     }
 
 
+def _validate_url(url: str) -> str:
+    raw = (url or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Enter a valid http or https URL")
+    return raw
+
+
+async def ingest_url(url: str) -> dict:
+    """Persist a website URL as a pending knowledge source (no crawling)."""
+    normalized = _validate_url(url)
+    document_id = str(uuid.uuid4())
+    storage = get_storage()
+    await storage.save_metadata(
+        document_id,
+        {
+            "filename": normalized,
+            "source_type": "url",
+            "url": normalized,
+            "file_type": "url",
+            "chunks": 0,
+            "status": "pending",
+        },
+    )
+    return {
+        "document_id": document_id,
+        "filename": normalized,
+        "chunks": 0,
+        "status": "pending",
+    }
+
+
 async def list_documents() -> list[dict]:
     storage = get_storage()
     return await storage.list_documents()
@@ -58,10 +91,17 @@ async def reindex_all() -> dict:
 
     faiss.rebuild()
 
+    indexed = 0
     for doc in docs:
+        if doc.get("source_type") == "url":
+            continue
         document_id = doc["id"]
         filename = doc.get("filename") or ""
-        content = await storage.load_document(document_id)
+        try:
+            content = await storage.load_document(document_id)
+        except FileNotFoundError:
+            continue
         await pipeline.run(document_id, content, filename=filename)
+        indexed += 1
 
-    return {"status": "reindex_complete", "documents": len(docs)}
+    return {"status": "reindex_complete", "documents": indexed}

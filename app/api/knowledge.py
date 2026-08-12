@@ -39,6 +39,19 @@ async def ingest(file: UploadFile = File(...)):
     return await _handle_upload(file)
 
 
+class UrlIngestRequest(BaseModel):
+    url: str
+
+
+@router.post("/url", response_model=UploadResponse)
+async def ingest_url(payload: UrlIngestRequest):
+    try:
+        result = await knowledge_service.ingest_url(payload.url)
+        return UploadResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/documents")
 async def list_documents():
     return await knowledge_service.list_documents()
