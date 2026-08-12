@@ -49,7 +49,12 @@ async def ingest_url(payload: UrlIngestRequest):
         result = await knowledge_service.ingest_url(payload.url)
         return UploadResponse(**result)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        message = str(exc)
+        if "already been added" in message or "valid http" in message:
+            raise HTTPException(status_code=422, detail=message) from exc
+        if "Timed out" in message:
+            raise HTTPException(status_code=504, detail=message) from exc
+        raise HTTPException(status_code=400, detail=message) from exc
 
 
 @router.get("/documents")

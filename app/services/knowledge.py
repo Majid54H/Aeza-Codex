@@ -8,6 +8,7 @@ from fastapi import UploadFile
 
 from app.config import settings
 from app.ingestion import pipeline
+from app.ingestion.loader import load_web_page
 from app.rag import faiss
 from app.storage.storage import get_storage
 
@@ -52,30 +53,51 @@ def _validate_url(url: str) -> str:
     parsed = urlparse(raw)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("Enter a valid http or https URL")
-    return raw
+    host = parsed.netloc.lower()
+    path = parsed.path.rstrip("/") or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    return f"{parsed.scheme}://{host}{path}{query}"
+
+
+async def _url_already_indexed(url: str) -> bool:
+    docs = await list_documents()
+    return any(
+        (doc.get("url") or "").rstrip("/") == url.rstrip("/")
+        or (doc.get("filename") or "").rstrip("/") == url.rstrip("/")
+        for doc in docs
+        if doc.get("source_type") == "url"
+    )
 
 
 async def ingest_url(url: str) -> dict:
-    """Persist a website URL as a pending knowledge source (no crawling)."""
+    """Fetch a single page, extract text, and index it in FAISS."""
     normalized = _validate_url(url)
+    if await _url_already_indexed(normalized):
+        raise ValueError("This URL has already been added")
+
+    text = await load_web_page(normalized)
     document_id = str(uuid.uuid4())
     storage = get_storage()
-    await storage.save_metadata(
+    await storage.save_document(document_id, "page.txt", text.encode("utf-8"))
+
+    extra = {
+        "filename": normalized,
+        "source_type": "url",
+        "url": normalized,
+        "file_type": "url",
+    }
+    chunks = await pipeline.run_text(
         document_id,
-        {
-            "filename": normalized,
-            "source_type": "url",
-            "url": normalized,
-            "file_type": "url",
-            "chunks": 0,
-            "status": "pending",
-        },
+        text,
+        filename=normalized,
+        extra_metadata=extra,
     )
+
     return {
         "document_id": document_id,
         "filename": normalized,
-        "chunks": 0,
-        "status": "pending",
+        "chunks": len(chunks),
+        "status": "indexed" if chunks else "empty",
     }
 
 
@@ -93,15 +115,24 @@ async def reindex_all() -> dict:
 
     indexed = 0
     for doc in docs:
-        if doc.get("source_type") == "url":
-            continue
         document_id = doc["id"]
         filename = doc.get("filename") or ""
         try:
             content = await storage.load_document(document_id)
         except FileNotFoundError:
             continue
-        await pipeline.run(document_id, content, filename=filename)
+        extra = None
+        if doc.get("source_type") == "url":
+            extra = {
+                "filename": doc.get("url") or filename,
+                "source_type": "url",
+                "url": doc.get("url") or filename,
+                "file_type": "url",
+            }
+            text = content.decode("utf-8", errors="replace")
+            await pipeline.run_text(document_id, text, filename=extra["filename"], extra_metadata=extra)
+        else:
+            await pipeline.run(document_id, content, filename=filename)
         indexed += 1
 
     return {"status": "reindex_complete", "documents": indexed}

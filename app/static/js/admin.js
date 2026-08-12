@@ -114,7 +114,7 @@ urlForm.addEventListener("submit", async (e) => {
         return;
     }
 
-    setUploadStatus("Saving website URL...");
+    setUploadStatus("Fetching and indexing page...");
     try {
         const res = await fetch("/api/knowledge/url", {
             method: "POST",
@@ -127,7 +127,7 @@ urlForm.addEventListener("submit", async (e) => {
             setUploadStatus(typeof detail === "string" ? detail : "Could not save URL.", true);
             return;
         }
-        setUploadStatus(`Saved ${data.filename} as pending (crawling not enabled yet).`);
+        setUploadStatus(`Indexed ${data.filename}: ${data.chunks} chunks (${data.status}).`);
         urlInput.value = "";
         await refresh();
     } catch {
