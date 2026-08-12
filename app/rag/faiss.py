@@ -1,4 +1,7 @@
-"""FAISS vector index for semantic search (local filesystem only)."""
+"""FAISS vector index for semantic search.
+
+Persistence goes through app.storage — no direct filesystem paths here.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +10,9 @@ from typing import Any
 import faiss  # type: ignore
 import numpy as np
 
-from app.config import settings
 from app.storage.storage import get_storage
 
-_index_path = settings.data_dir / "indexes" / "faiss.index"
-
-# In-memory state (reconstructed from disk on startup)
+# In-memory state (reconstructed from storage on startup)
 _index: Any | None = None
 _mapping: list[dict[str, Any]] = []
 _dim: int | None = None
@@ -37,18 +37,15 @@ def create_index(dim: int) -> None:
 
 
 def reset() -> None:
-    """Clear in-memory index, mapping, and persisted index file."""
+    """Clear in-memory index, mapping, and persisted index."""
     global _index, _mapping, _dim
     _index = None
     _mapping = []
     _dim = None
 
-    try:
-        _index_path.unlink()
-    except FileNotFoundError:
-        pass
-
-    _storage().save_chunk_mapping([])
+    storage = _storage()
+    storage.delete_faiss_index()
+    storage.save_chunk_mapping([])
 
 
 def add(
@@ -90,28 +87,32 @@ def add(
 
 
 def save() -> None:
-    """Persist FAISS index (vectors only) and chunk mapping (metadata)."""
+    """Persist FAISS index (as bytes) and chunk mapping via storage."""
     if _index is None:
         return
 
-    _index_path.parent.mkdir(parents=True, exist_ok=True)
-    faiss.write_index(_index, str(_index_path))
-    _storage().save_chunk_mapping(_mapping)
+    storage = _storage()
+    serialized = faiss.serialize_index(_index)
+    storage.save_faiss_index(np.asarray(serialized).tobytes())
+    storage.save_chunk_mapping(_mapping)
 
 
 def load() -> None:
-    """Load FAISS index and chunk mapping from disk. Safe if files are missing."""
+    """Load FAISS index and chunk mapping from storage. Safe if missing."""
     global _index, _mapping, _dim
 
-    _mapping = _storage().load_chunk_mapping()
+    storage = _storage()
+    _mapping = storage.load_chunk_mapping()
 
-    if not _index_path.exists():
+    raw = storage.load_faiss_index()
+    if not raw:
         _index = None
         _dim = None
         return
 
     try:
-        _index = faiss.read_index(str(_index_path))
+        arr = np.frombuffer(raw, dtype=np.uint8)
+        _index = faiss.deserialize_index(arr)
         _dim = int(_index.d)
     except Exception:
         _index = None
