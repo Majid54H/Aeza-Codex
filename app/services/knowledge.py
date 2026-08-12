@@ -10,7 +10,7 @@ from app.ingestion.loader import load_web_page
 from app.rag import faiss
 from app.storage.storage import get_storage
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".xlsx", ".xls"}
 
 
 def _validate_file(filename: str | None, size: int) -> str:

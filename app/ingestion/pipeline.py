@@ -2,10 +2,12 @@
 
 from pathlib import Path
 
-from app.ingestion.loader import load_text
-from app.ingestion.chunker import chunk_with_metadata
+from app.ingestion.loader import extract_excel_records, load_text
+from app.ingestion.chunker import chunk_records_with_metadata, chunk_with_metadata
 from app.rag import embeddings, faiss
 from app.storage.storage import get_storage
+
+TABLE_SUFFIXES = {".xlsx", ".xls"}
 
 
 async def run_text(
@@ -16,6 +18,15 @@ async def run_text(
 ) -> list[dict]:
     """Chunk, embed, and index already-extracted text."""
     chunks = list(chunk_with_metadata(text, document_id))
+    return await _index_chunks(document_id, chunks, filename, extra_metadata)
+
+
+async def _index_chunks(
+    document_id: str,
+    chunks: list[dict],
+    filename: str = "",
+    extra_metadata: dict | None = None,
+) -> list[dict]:
     storage = get_storage()
     metadata = {
         "filename": filename,
@@ -39,5 +50,10 @@ async def run_text(
 
 
 async def run(document_id: str, content: bytes, filename: str = "") -> list[dict]:
+    suffix = Path(filename).suffix.lower()
+    if suffix in TABLE_SUFFIXES:
+        records = extract_excel_records(content, filename)
+        chunks = list(chunk_records_with_metadata(records, document_id))
+        return await _index_chunks(document_id, chunks, filename)
     text = load_text(content, filename)
     return await run_text(document_id, text, filename=filename)
