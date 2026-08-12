@@ -12,6 +12,18 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = "You are a helpful business assistant. Answer clearly and concisely."
 
+RAG_SYSTEM_PROMPT = (
+    "You are a business assistant. Answer ONLY using the provided context. "
+    "Do not use outside knowledge or invent business details. "
+    "If the context does not contain enough information to answer, "
+    "say you do not know and suggest contacting the business directly."
+)
+
+NO_CONTEXT_REPLY = (
+    "I don't have enough information in the knowledge base to answer that question. "
+    "Please contact the business directly or ask about topics covered in uploaded documents."
+)
+
 FALLBACK_REPLY = (
     "Sorry, I'm unable to respond right now. Please try again in a moment."
 )
@@ -60,7 +72,7 @@ def _build_messages(query: str, context: list[dict] | None) -> list[dict[str, st
     if chunks:
         context_text = "\n\n".join(c.get("text", "") for c in chunks if c.get("text"))
         user_content = f"Context:\n{context_text}\n\nQuestion: {query}"
-        system_content = "Answer based on the provided context. If unsure, say so."
+        system_content = RAG_SYSTEM_PROMPT
     else:
         user_content = query
         system_content = SYSTEM_PROMPT

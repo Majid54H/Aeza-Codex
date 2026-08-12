@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     chat_model: str = "gpt-4o-mini"
     data_dir: Path = Path("data")
     max_upload_size_mb: int = 10
+    rag_top_k: int = 5
+    rag_min_score: float = 0.25
 
     @property
     def max_upload_bytes(self) -> int:
