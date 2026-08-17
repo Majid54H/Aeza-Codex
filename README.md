@@ -1,6 +1,11 @@
 # Aeza Codex
 
-Self-hostable RAG chatbot for a business knowledge base. FastAPI backend, vanilla HTML/CSS/JS admin and chat UIs, OpenAI embeddings + chat, and FAISS over local disk storage.
+Self-hostable RAG chatbot for a business knowledge base. FastAPI backend, vanilla HTML/CSS/JS admin and chat UIs, OpenAI-compatible embeddings + chat, and FAISS over local disk (Vercel Blob optional).
+
+**Release 0.1.0.** Supported topology: one process, local disk. Vercel is experimental. Vector database (Qdrant) is planned for 0.2.0.
+
+Architecture, data model, APIs, and deployment constraints: **[System Design Document](docs/SYSTEM_DESIGN.md)**.
+
 
 ## Features
 
@@ -123,7 +128,9 @@ uvicorn app.main:app --reload
 | POST | `/api/knowledge/url` | Basic | Fetch & index one public page |
 | GET | `/api/knowledge/documents` | Public | List indexed sources |
 
-## Architecture (V1)
+## Architecture (v0.1)
+
+See **[docs/SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md)** for the full design (context, layers, ingest/retrieval, data stores, authentication, deployment).
 
 ```
 app/api → app/services → app/ingestion | app/rag → app/storage (LocalStorage or BlobStorage)
@@ -131,7 +138,8 @@ templates/ + static/ (vanilla JS)
 data/ (local) or Vercel Blob (serverless)
 ```
 
-Local development uses **local disk** by default. On Vercel (`VERCEL=1`), storage auto-selects **Blob** unless `STORAGE_BACKEND=local` is set.
+Local development uses **local disk** by default. On Vercel, Blob is used when `BLOB_READ_WRITE_TOKEN` is set; otherwise storage is ephemeral `/tmp`.
+
 
 ## Operational notes
 
