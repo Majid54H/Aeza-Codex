@@ -45,11 +45,12 @@ class Settings(BaseSettings):
 
     @property
     def resolved_storage_backend(self) -> str:
+        # Vercel has a read-only filesystem — always use Blob there.
+        if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+            return "blob"
         explicit = (self.storage_backend or "").strip().lower()
         if explicit in {"local", "blob"}:
             return explicit
-        if os.environ.get("VERCEL"):
-            return "blob"
         return "local"
 
 

@@ -94,16 +94,14 @@ async def health():
 @app.get("/admin")
 async def admin_page(request: Request):
     """Owner/admin UI landing page (custom login handled in the UI)."""
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse(request, "admin.html", {})
 
 
 @app.get("/chat")
 async def chat_page(request: Request, embed: str = ""):
     """Customer chat UI. Use ?embed=1 to fill the parent iframe size."""
     return templates.TemplateResponse(
+        request,
         "chat.html",
-        {
-            "request": request,
-            "embed": embed.lower() in {"1", "true", "yes"},
-        },
+        {"embed": embed.lower() in {"1", "true", "yes"}},
     )
