@@ -3,8 +3,8 @@ name = "aeza-codex"
 version = "1.0.0"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.111.0",
-    "starlette>=0.45.0",
+    "fastapi>=0.128.0",
+    "starlette>=1.0.0",
     "uvicorn[standard]>=0.30.0",
     "pydantic-settings>=2.3.0",
     "python-multipart>=0.0.9",

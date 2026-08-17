@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.responses import Response
+from starlette.responses import RedirectResponse, Response
 
 from app.api import admin, chat, knowledge as knowledge_api
 from app.config import settings
@@ -75,7 +75,7 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 @app.get("/")
 async def root():
-    return {"service": "Aeza Codex", "chat": "/chat", "admin": "/admin", "health": "/health"}
+    return RedirectResponse(url="/chat")
 
 
 @app.get("/health")
