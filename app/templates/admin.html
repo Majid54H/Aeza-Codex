@@ -22,8 +22,9 @@
                 <p id="admin-login-status" class="upload-status" aria-live="polite"></p>
             </form>
             <p class="admin-auth-help">
-                First-time login uses <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> from your
-                <code>.env</code> file. After you change credentials, use the new ones.
+                First-time login uses <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code>
+                (default: <code>admin</code> / <code>change-me</code>). After you update credentials,
+                sign in with the <strong>new</strong> username and password.
             </p>
             <button type="button" id="toggle-recover-btn" class="admin-auth-toggle" aria-expanded="false">
                 Change credentials
@@ -156,6 +157,7 @@
                     <label for="admin-new-password">New password</label>
                     <input type="password" id="admin-new-password" maxlength="200" autocomplete="off" required>
 
+                    <p class="hint">After updating, log out and sign in with the new username and password — not the old default.</p>
                     <button type="submit">Update credentials</button>
                 </form>
                 <p id="credentials-status" class="upload-status" aria-live="polite"></p>

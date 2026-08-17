@@ -34,6 +34,7 @@ class BlobStorage(StorageBackend):
                 "Connect a Vercel Blob store to this project, or set BLOB_READ_WRITE_TOKEN."
             )
         self._client = BlobClient(token=self._token)
+        self._admin_creds_cache: dict | None = None
 
     def _path(self, *parts: str) -> str:
         cleaned = [self._prefix] if self._prefix else []
@@ -245,6 +246,9 @@ class BlobStorage(StorageBackend):
         return products
 
     async def load_admin_credentials(self) -> dict:
+        if self._admin_creds_cache:
+            return self._admin_creds_cache
+
         path = self._path("metadata", ADMIN_CREDENTIALS_FILE)
         data = self._get_json(path)
         if (
@@ -254,6 +258,7 @@ class BlobStorage(StorageBackend):
             and data.get("salt")
             and data.get("iterations")
         ):
+            self._admin_creds_cache = data
             return data
 
         if not settings.admin_password:
@@ -267,6 +272,7 @@ class BlobStorage(StorageBackend):
             "password_hash": password_hash,
             "salt": salt,
             "iterations": iterations,
+            "source": "env",
         }
 
         try:
@@ -274,7 +280,11 @@ class BlobStorage(StorageBackend):
         except Exception:
             pass
 
+        self._admin_creds_cache = creds
         return creds
 
     async def save_admin_credentials(self, creds: dict) -> None:
-        self._put_json(self._path("metadata", ADMIN_CREDENTIALS_FILE), creds)
+        payload = dict(creds)
+        payload["source"] = "user"
+        self._put_json(self._path("metadata", ADMIN_CREDENTIALS_FILE), payload)
+        self._admin_creds_cache = payload

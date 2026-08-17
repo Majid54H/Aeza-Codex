@@ -419,7 +419,8 @@ if (credentialsForm) {
             credentialsForm.reset();
             await logoutAdmin();
             if (adminLoginStatus) {
-                adminLoginStatus.textContent = "Credentials updated — please sign in again.";
+                adminLoginStatus.textContent =
+                    "Credentials updated. Sign in with your NEW username and password.";
                 adminLoginStatus.className = "upload-status success";
             }
         } catch {

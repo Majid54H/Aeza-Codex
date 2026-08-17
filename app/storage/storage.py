@@ -219,6 +219,7 @@ class LocalStorage(StorageBackend):
         self.products_dir = self.metadata_dir / "products"
         self.products_dir.mkdir(parents=True, exist_ok=True)
         self._admin_credentials_path = self.metadata_dir / ADMIN_CREDENTIALS_FILE
+        self._admin_creds_cache: dict | None = None
 
     def _hash_password(self, password: str, salt: str, iterations: int) -> str:
         salt_bytes = (salt or "").encode("utf-8")
@@ -425,6 +426,9 @@ class LocalStorage(StorageBackend):
         return products
 
     async def load_admin_credentials(self) -> dict:
+        if self._admin_creds_cache:
+            return self._admin_creds_cache
+
         path = self._admin_credentials_path
         if path.exists():
             try:
@@ -436,6 +440,7 @@ class LocalStorage(StorageBackend):
                     and data.get("salt")
                     and data.get("iterations")
                 ):
+                    self._admin_creds_cache = data
                     return data
             except (json.JSONDecodeError, OSError):
                 pass
@@ -451,6 +456,7 @@ class LocalStorage(StorageBackend):
             "password_hash": password_hash,
             "salt": salt,
             "iterations": iterations,
+            "source": "env",
         }
 
         try:
@@ -458,10 +464,16 @@ class LocalStorage(StorageBackend):
         except OSError:
             pass
 
+        self._admin_creds_cache = creds
         return creds
 
     async def save_admin_credentials(self, creds: dict) -> None:
-        self._admin_credentials_path.write_text(json.dumps(creds, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = dict(creds)
+        payload["source"] = "user"
+        self._admin_credentials_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        self._admin_creds_cache = payload
 
 
 _storage_singleton: StorageBackend | None = None

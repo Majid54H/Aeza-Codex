@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from app.api.deps import (
-    ADMIN_SESSION_COOKIE,
-    _make_session_cookie,
+    apply_creds_cookie,
+    apply_session_cookie,
+    clear_session_cookie,
+    credential_candidates,
+    env_credentials_match,
     get_admin_username_optional,
+    hash_password,
+    match_login,
+    password_matches,
     require_admin,
 )
 from app.config import settings
@@ -46,57 +51,42 @@ class AdminRecoverCredentialsRequest(BaseModel):
     new_password: str = Field(min_length=1, max_length=200)
 
 
-def _hash_password(password: str, salt: str, iterations: int) -> str:
-    dk = hashlib.pbkdf2_hmac(
-        "sha256",
-        (password or "").encode("utf-8"),
-        (salt or "").encode("utf-8"),
-        int(iterations),
-    )
-    return dk.hex()
-
-
-def _set_session_cookie(response: Response, username: str, password_hash: str) -> None:
-    cookie_value = _make_session_cookie(username, password_hash)
-    response.set_cookie(
-        key=ADMIN_SESSION_COOKIE,
-        value=cookie_value,
-        httponly=True,
-        samesite="lax",
-        secure=False,
-        path="/",
-    )
-
-
-async def _verify_recovery_password(recovery_password: str, creds: dict) -> bool:
-    salt = str(creds.get("salt") or "")
-    iterations = int(creds.get("iterations") or 200_000)
-    expected_hash = creds.get("password_hash") or ""
-    actual_hash = _hash_password(recovery_password, salt=salt, iterations=iterations)
-    if actual_hash == expected_hash:
-        return True
+async def _verify_recovery_password(request: Request, recovery_password: str) -> bool:
+    for creds in await credential_candidates(request):
+        if password_matches(recovery_password, creds):
+            return True
     env_password = settings.admin_password or ""
     return bool(env_password) and secrets.compare_digest(recovery_password, env_password)
+
+
+def _build_credentials(username: str, password: str) -> dict:
+    salt = secrets.token_hex(16)
+    iterations = 200_000
+    return {
+        "username": username.strip(),
+        "password_hash": hash_password(password, salt=salt, iterations=iterations),
+        "salt": salt,
+        "iterations": iterations,
+        "source": "user",
+    }
 
 
 async def _save_new_credentials(
     response: Response,
     new_username: str,
     new_password: str,
-) -> None:
-    new_salt = secrets.token_hex(16)
-    new_iterations = 200_000
-    new_hash = _hash_password(new_password, salt=new_salt, iterations=new_iterations)
-    storage = get_storage()
-    await storage.save_admin_credentials(
-        {
-            "username": new_username,
-            "password_hash": new_hash,
-            "salt": new_salt,
-            "iterations": new_iterations,
-        }
-    )
-    _set_session_cookie(response, new_username, new_hash)
+    set_session: bool = True,
+) -> dict:
+    creds = _build_credentials(new_username, new_password)
+    try:
+        await get_storage().save_admin_credentials(creds)
+    except Exception:
+        # Cookie still keeps the new login working on this browser (e.g. ephemeral /tmp).
+        pass
+    apply_creds_cookie(response, creds)
+    if set_session:
+        apply_session_cookie(response, creds["username"], creds["password_hash"])
+    return creds
 
 
 @router.get("/auth-status")
@@ -106,78 +96,77 @@ async def auth_status(request: Request):
 
 
 @router.post("/login")
-async def login(payload: AdminLoginRequest, response: Response):
-    storage = get_storage()
+async def login(payload: AdminLoginRequest, request: Request, response: Response):
     try:
-        creds = await storage.load_admin_credentials()
+        candidates = await credential_candidates(request)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    if (payload.username or "") != (creds.get("username") or ""):
+    matched = match_login(payload.username, payload.password, candidates)
+    if matched is None:
+        has_user_creds = any(item.get("source") == "user" for item in candidates)
+        if not has_user_creds and env_credentials_match(payload.username, payload.password):
+            matched = next((item for item in candidates if item.get("source") != "user"), None)
+            if matched is None and candidates:
+                matched = candidates[0]
+
+    if matched is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    salt = str(creds.get("salt") or "")
-    iterations = int(creds.get("iterations") or 200_000)
-    expected_hash = creds.get("password_hash") or ""
-    actual_hash = _hash_password(payload.password, salt=salt, iterations=iterations)
-    if actual_hash != expected_hash:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    _set_session_cookie(response, payload.username, expected_hash)
-    return {"status": "logged_in", "username": payload.username}
+    username = matched["username"]
+    apply_session_cookie(response, username, matched["password_hash"])
+    if matched.get("source") == "user":
+        apply_creds_cookie(response, matched)
+    return {"status": "logged_in", "username": username}
 
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(key=ADMIN_SESSION_COOKIE, path="/")
+    clear_session_cookie(response)
     return {"status": "logged_out"}
 
 
 @router.put("/credentials")
 async def update_credentials(
     payload: AdminCredentialsUpdateRequest,
+    request: Request,
     response: Response,
-    _: str = Depends(require_admin),
+    _username: str = Depends(require_admin),
 ):
-    storage = get_storage()
-    creds = await storage.load_admin_credentials()
+    current_ok = False
+    for creds in await credential_candidates(request):
+        if password_matches(payload.current_password, creds):
+            current_ok = True
+            break
+    if not current_ok:
+        env_password = settings.admin_password or ""
+        if not env_password or not secrets.compare_digest(payload.current_password, env_password):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
 
-    salt = str(creds.get("salt") or "")
-    iterations = int(creds.get("iterations") or 200_000)
-    expected_hash = creds.get("password_hash") or ""
-    actual_hash = _hash_password(payload.current_password, salt=salt, iterations=iterations)
-    if actual_hash != expected_hash:
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-
-    new_salt = secrets.token_hex(16)
-    new_iterations = 200_000
-    new_hash = _hash_password(payload.new_password, salt=new_salt, iterations=new_iterations)
-    await storage.save_admin_credentials(
-        {
-            "username": payload.new_username,
-            "password_hash": new_hash,
-            "salt": new_salt,
-            "iterations": new_iterations,
-        }
+    creds = await _save_new_credentials(
+        response,
+        payload.new_username,
+        payload.new_password,
+        set_session=False,
     )
-
-    response.delete_cookie(key=ADMIN_SESSION_COOKIE, path="/")
-    return {"status": "credentials_updated"}
+    clear_session_cookie(response)
+    return {"status": "credentials_updated", "username": creds["username"]}
 
 
 @router.post("/recover-credentials")
-async def recover_credentials(payload: AdminRecoverCredentialsRequest, response: Response):
-    storage = get_storage()
+async def recover_credentials(
+    payload: AdminRecoverCredentialsRequest,
+    request: Request,
+    response: Response,
+):
     try:
-        creds = await storage.load_admin_credentials()
+        if not await _verify_recovery_password(request, payload.recovery_password):
+            raise HTTPException(status_code=401, detail="Recovery password is incorrect")
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    if not await _verify_recovery_password(payload.recovery_password, creds):
-        raise HTTPException(status_code=401, detail="Recovery password is incorrect")
-
-    await _save_new_credentials(response, payload.new_username, payload.new_password)
-    return {"status": "credentials_recovered", "username": payload.new_username}
+    creds = await _save_new_credentials(response, payload.new_username, payload.new_password)
+    return {"status": "credentials_recovered", "username": creds["username"]}
 
 
 @router.get("/settings", response_model=ChatbotSettings)
