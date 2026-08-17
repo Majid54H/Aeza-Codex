@@ -7,10 +7,51 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body class="admin">
-    <div class="container admin-page">
-        <header>
-            <h1>Aeza Codex Admin</h1>
-            <p>Configure your chatbot, knowledge sources, and branding</p>
+    <section id="auth-panel" class="admin-auth-screen" hidden>
+        <div class="admin-auth-card">
+            <header class="admin-auth-header">
+                <h1>Aeza Codex Admin</h1>
+                <p>Sign in to manage knowledge sources and branding</p>
+            </header>
+            <form id="admin-login-form" class="admin-auth-form" autocomplete="off">
+                <label for="admin-username">Username</label>
+                <input type="text" id="admin-username" maxlength="80" autocomplete="off" required>
+                <label for="admin-password">Password</label>
+                <input type="password" id="admin-password" maxlength="200" autocomplete="off" required>
+                <button type="submit">Sign in</button>
+                <p id="admin-login-status" class="upload-status" aria-live="polite"></p>
+            </form>
+            <p class="admin-auth-help">
+                First-time login uses <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> from your
+                <code>.env</code> file. After you change credentials, use the new ones.
+            </p>
+            <button type="button" id="toggle-recover-btn" class="admin-auth-toggle" aria-expanded="false">
+                Change credentials
+            </button>
+            <form id="recover-credentials-form" class="admin-auth-recover" hidden autocomplete="off">
+                <label for="recover-password">Recovery password</label>
+                <input type="password" id="recover-password" maxlength="200" autocomplete="off" required>
+                <p class="admin-auth-hint">Use your current password or the <code>ADMIN_PASSWORD</code> from <code>.env</code>.</p>
+                <label for="recover-new-username">New username</label>
+                <input type="text" id="recover-new-username" maxlength="80" autocomplete="off" required>
+                <label for="recover-new-password">New password</label>
+                <input type="password" id="recover-new-password" maxlength="200" autocomplete="off" required>
+                <button type="submit">Save new credentials</button>
+                <p id="recover-status" class="upload-status" aria-live="polite"></p>
+            </form>
+        </div>
+    </section>
+
+    <div id="admin-dashboard" class="container admin-page" hidden>
+        <header class="admin-dashboard-header">
+            <div>
+                <h1>Aeza Codex Admin</h1>
+                <p>Configure your chatbot, knowledge sources, and branding</p>
+            </div>
+            <div class="admin-dashboard-actions">
+                <span id="admin-user-label" class="admin-user-label"></span>
+                <button type="button" id="admin-logout-btn" class="admin-logout-btn">Logout</button>
+            </div>
         </header>
         <main>
             <section id="dashboard-section">
@@ -101,6 +142,23 @@
                     <button type="submit">Save branding</button>
                 </form>
                 <p id="settings-status" class="upload-status" aria-live="polite"></p>
+            </section>
+
+            <section id="credentials-section" class="panel">
+                <h2>Admin Credentials</h2>
+                <form id="credentials-form">
+                    <label for="admin-current-password">Current password</label>
+                    <input type="password" id="admin-current-password" maxlength="200" autocomplete="off" required>
+
+                    <label for="admin-new-username">New username</label>
+                    <input type="text" id="admin-new-username" maxlength="80" autocomplete="off" required>
+
+                    <label for="admin-new-password">New password</label>
+                    <input type="password" id="admin-new-password" maxlength="200" autocomplete="off" required>
+
+                    <button type="submit">Update credentials</button>
+                </form>
+                <p id="credentials-status" class="upload-status" aria-live="polite"></p>
             </section>
 
             <section id="embed-section" class="panel">

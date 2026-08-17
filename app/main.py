@@ -6,7 +6,6 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
 from app.api import admin, chat, knowledge as knowledge_api
-from app.api.deps import require_admin
 from app.config import settings
 from app.rag import faiss as faiss_index
 from app.services import knowledge as knowledge_service
@@ -44,8 +43,8 @@ async def health():
 
 
 @app.get("/admin")
-async def admin_page(request: Request, _: str = Depends(require_admin)):
-    """Owner/admin UI landing page (HTTP Basic auth required)."""
+async def admin_page(request: Request):
+    """Owner/admin UI landing page (custom login handled in the UI)."""
     return templates.TemplateResponse("admin.html", {"request": request})
 
 

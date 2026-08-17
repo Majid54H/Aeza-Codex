@@ -363,6 +363,7 @@ body.admin .form-row {
 
 body.admin input[type="text"],
 body.admin input[type="url"],
+body.admin input[type="password"],
 body.admin textarea {
     width: 100%;
     padding: 0.7rem 0.9rem;
@@ -375,6 +376,7 @@ body.admin textarea {
 
 body.admin input[type="text"]:focus,
 body.admin input[type="url"]:focus,
+body.admin input[type="password"]:focus,
 body.admin textarea:focus {
     outline: 2px solid #FFAB00;
     outline-offset: 1px;
@@ -446,6 +448,169 @@ body.admin button {
 
 body.admin button:hover {
     background: #e69a00;
+}
+
+body.admin .admin-auth-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+body.admin .admin-auth-screen[hidden],
+body.admin #admin-dashboard[hidden] {
+    display: none !important;
+}
+
+body.admin .admin-auth-card {
+    width: 100%;
+    max-width: 360px;
+    background: #FFFFFF;
+    border: 1px solid #E0E0E0;
+    border-radius: 12px;
+    padding: 1.75rem 1.75rem 1.5rem;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.07);
+}
+
+body.admin .admin-auth-header {
+    text-align: center;
+    margin-bottom: 1.35rem;
+}
+
+body.admin .admin-auth-header h1 {
+    margin: 0 0 0.35rem;
+    font-size: 1.35rem;
+}
+
+body.admin .admin-auth-header p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #666666;
+}
+
+body.admin .admin-auth-form label:first-of-type {
+    margin-top: 0;
+}
+
+body.admin .admin-auth-form label {
+    margin: 0.85rem 0 0.35rem;
+}
+
+body.admin .admin-auth-form button[type="submit"] {
+    width: 100%;
+    margin-top: 1.25rem;
+    padding: 0.75rem 1rem;
+}
+
+body.admin .admin-auth-form .upload-status {
+    margin-top: 0.75rem;
+    text-align: center;
+    min-height: 1.25rem;
+}
+
+body.admin .admin-auth-help {
+    margin: 1rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: #666666;
+    text-align: center;
+}
+
+body.admin .admin-auth-help code {
+    font-size: 0.76rem;
+    background: #F5F5F5;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+}
+
+body.admin .admin-auth-toggle {
+    display: block;
+    width: 100%;
+    margin-top: 0.85rem;
+    padding: 0.55rem 0.75rem;
+    background: transparent;
+    color: #2C2C2C;
+    border: 1px solid #D4D4D4;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+body.admin .admin-auth-toggle:hover {
+    background: #F5F5F5;
+}
+
+body.admin .admin-auth-recover {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #E8E8E8;
+}
+
+body.admin .admin-auth-recover label:first-of-type {
+    margin-top: 0;
+}
+
+body.admin .admin-auth-recover label {
+    margin: 0.75rem 0 0.35rem;
+}
+
+body.admin .admin-auth-recover button[type="submit"] {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+}
+
+body.admin .admin-auth-recover .upload-status {
+    margin-top: 0.75rem;
+    text-align: center;
+    min-height: 1.25rem;
+}
+
+body.admin .admin-auth-hint {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: #888888;
+    line-height: 1.4;
+}
+
+body.admin .admin-auth-hint code {
+    font-size: 0.73rem;
+    background: #F5F5F5;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+}
+
+body.admin .admin-dashboard-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+body.admin .admin-dashboard-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+body.admin .admin-user-label {
+    font-size: 0.85rem;
+    color: #666666;
+}
+
+body.admin .admin-logout-btn {
+    padding: 0.5rem 0.9rem;
+    background: #FFFFFF;
+    color: #2C2C2C;
+    border: 1px solid #D4D4D4;
+    font-weight: 600;
+}
+
+body.admin .admin-logout-btn:hover {
+    background: #F5F5F5;
 }
 
 body.admin .hint {
@@ -1062,7 +1227,7 @@ body.chat .chat-powered {
     text-align: center;
     font-size: 0.65rem;
     font-weight: 400;
-    color: #C4C4C4;
+    color: #FFAB00;
     letter-spacing: 0.02em;
     pointer-events: none;
     user-select: none;

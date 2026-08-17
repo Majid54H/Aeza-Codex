@@ -18,6 +18,29 @@ const statName = document.getElementById("stat-name");
 const statCount = document.getElementById("stat-count");
 const statStatus = document.getElementById("stat-status");
 
+const authPanel = document.getElementById("auth-panel");
+const adminDashboard = document.getElementById("admin-dashboard");
+const adminLoginForm = document.getElementById("admin-login-form");
+const adminUsernameInput = document.getElementById("admin-username");
+const adminPasswordInput = document.getElementById("admin-password");
+const adminLoginStatus = document.getElementById("admin-login-status");
+
+const credentialsForm = document.getElementById("credentials-form");
+const adminCurrentPasswordInput = document.getElementById("admin-current-password");
+const adminNewUsernameInput = document.getElementById("admin-new-username");
+const adminNewPasswordInput = document.getElementById("admin-new-password");
+const credentialsStatus = document.getElementById("credentials-status");
+
+const toggleRecoverBtn = document.getElementById("toggle-recover-btn");
+const recoverCredentialsForm = document.getElementById("recover-credentials-form");
+const recoverPasswordInput = document.getElementById("recover-password");
+const recoverNewUsernameInput = document.getElementById("recover-new-username");
+const recoverNewPasswordInput = document.getElementById("recover-new-password");
+const recoverStatus = document.getElementById("recover-status");
+
+const adminLogoutBtn = document.getElementById("admin-logout-btn");
+const adminUserLabel = document.getElementById("admin-user-label");
+
 function setStatus(el, message, isError = false) {
     if (!el) return;
     el.textContent = message;
@@ -114,7 +137,7 @@ function sourceLabel(doc) {
 }
 
 async function loadDocuments() {
-    const res = await fetch("/api/knowledge/documents");
+    const res = await fetch("/api/knowledge/documents", { credentials: "include" });
     const docs = await res.json();
     const list = Array.isArray(docs) ? docs : [];
     documentList.replaceChildren();
@@ -182,6 +205,7 @@ async function confirmDelete() {
     try {
         const res = await fetch(`/api/knowledge/documents/${encodeURIComponent(target.id)}`, {
             method: "DELETE",
+            credentials: "include",
         });
         if (!res.ok) {
             setUploadStatus("Could not delete source.", true);
@@ -199,7 +223,7 @@ function isHexColor(value) {
 }
 
 async function loadSettings() {
-    const res = await fetch("/api/admin/settings");
+    const res = await fetch("/api/admin/settings", { credentials: "include" });
     const settings = await res.json();
     chatbotNameInput.value = settings.chatbot_name || "";
     welcomeInput.value = settings.welcome_message || "";
@@ -223,6 +247,188 @@ async function refresh() {
     }
 }
 
+function setAuthUI(authenticated, username = "") {
+    if (authPanel) authPanel.hidden = !!authenticated;
+    if (adminDashboard) adminDashboard.hidden = !authenticated;
+    if (adminUserLabel) {
+        adminUserLabel.textContent = authenticated && username ? username : "";
+    }
+    if (authenticated && adminNewUsernameInput && username) {
+        adminNewUsernameInput.value = username;
+    }
+}
+
+async function checkAuthStatus() {
+    try {
+        const res = await fetch("/api/admin/auth-status", { credentials: "include" });
+        if (!res.ok) return { authenticated: false, username: "" };
+        const data = await res.json();
+        return {
+            authenticated: !!data.authenticated,
+            username: data.username || "",
+        };
+    } catch {
+        return { authenticated: false, username: "" };
+    }
+}
+
+async function initAuth() {
+    const { authenticated, username } = await checkAuthStatus();
+    setAuthUI(authenticated, username);
+    if (authenticated) {
+        try {
+            await refresh();
+        } catch {
+            /* keep dashboard visible even if refresh fails */
+        }
+    }
+}
+
+async function logoutAdmin() {
+    try {
+        await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+    } catch {
+        /* still show login on failure */
+    }
+    if (adminLoginForm) adminLoginForm.reset();
+    if (recoverCredentialsForm) {
+        recoverCredentialsForm.hidden = true;
+        recoverCredentialsForm.reset();
+    }
+    if (toggleRecoverBtn) toggleRecoverBtn.setAttribute("aria-expanded", "false");
+    if (adminLoginStatus) adminLoginStatus.textContent = "";
+    setAuthUI(false);
+}
+
+if (adminLoginForm) {
+    adminLoginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!adminUsernameInput || !adminPasswordInput) return;
+        if (!adminLoginStatus) return;
+
+        adminLoginStatus.textContent = "";
+        try {
+            const res = await fetch("/api/admin/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    username: adminUsernameInput.value.trim(),
+                    password: adminPasswordInput.value,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                adminLoginStatus.textContent = data.detail || "Login failed.";
+                adminLoginStatus.className = "upload-status error";
+                return;
+            }
+            setAuthUI(true, data.username || adminUsernameInput.value.trim());
+            adminLoginStatus.textContent = "";
+            try {
+                await refresh();
+            } catch {
+                /* dashboard already visible */
+            }
+        } catch {
+            adminLoginStatus.textContent = "Login failed. Please try again.";
+            adminLoginStatus.className = "upload-status error";
+        }
+    });
+}
+
+if (toggleRecoverBtn && recoverCredentialsForm) {
+    toggleRecoverBtn.addEventListener("click", () => {
+        const expanded = recoverCredentialsForm.hidden;
+        recoverCredentialsForm.hidden = !expanded;
+        toggleRecoverBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+        if (expanded && recoverPasswordInput) {
+            recoverPasswordInput.focus();
+        }
+    });
+}
+
+if (recoverCredentialsForm) {
+    recoverCredentialsForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!recoverStatus) return;
+        recoverStatus.textContent = "Saving new credentials...";
+        recoverStatus.className = "upload-status";
+        try {
+            const res = await fetch("/api/admin/recover-credentials", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    recovery_password: recoverPasswordInput.value,
+                    new_username: recoverNewUsernameInput.value.trim(),
+                    new_password: recoverNewPasswordInput.value,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                recoverStatus.textContent = data.detail || "Could not update credentials.";
+                recoverStatus.className = "upload-status error";
+                return;
+            }
+            recoverStatus.textContent = "Credentials saved.";
+            recoverStatus.className = "upload-status success";
+            recoverCredentialsForm.reset();
+            recoverCredentialsForm.hidden = true;
+            if (toggleRecoverBtn) toggleRecoverBtn.setAttribute("aria-expanded", "false");
+            setAuthUI(true, data.username || recoverNewUsernameInput.value.trim());
+            try {
+                await refresh();
+            } catch {
+                /* dashboard already visible */
+            }
+        } catch {
+            recoverStatus.textContent = "Update failed. Please try again.";
+            recoverStatus.className = "upload-status error";
+        }
+    });
+}
+
+if (adminLogoutBtn) {
+    adminLogoutBtn.addEventListener("click", logoutAdmin);
+}
+
+if (credentialsForm) {
+    credentialsForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!credentialsStatus) return;
+        try {
+            credentialsStatus.textContent = "Updating credentials...";
+            credentialsStatus.className = "upload-status";
+            const res = await fetch("/api/admin/credentials", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    current_password: adminCurrentPasswordInput.value,
+                    new_username: adminNewUsernameInput.value.trim(),
+                    new_password: adminNewPasswordInput.value,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                credentialsStatus.textContent = data.detail || "Could not update.";
+                credentialsStatus.className = "upload-status error";
+                return;
+            }
+            credentialsForm.reset();
+            await logoutAdmin();
+            if (adminLoginStatus) {
+                adminLoginStatus.textContent = "Credentials updated — please sign in again.";
+                adminLoginStatus.className = "upload-status success";
+            }
+        } catch {
+            credentialsStatus.textContent = "Update failed. Please try again.";
+            credentialsStatus.className = "upload-status error";
+        }
+    });
+}
+
 uploadForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const file = fileInput.files[0];
@@ -237,7 +443,7 @@ uploadForm.addEventListener("submit", async (e) => {
     formData.append("file", file);
 
     try {
-        const res = await fetch("/api/knowledge/upload", { method: "POST", body: formData });
+        const res = await fetch("/api/knowledge/upload", { method: "POST", body: formData, credentials: "include" });
         const data = await res.json();
 
         if (!res.ok) {
@@ -269,6 +475,7 @@ urlForm.addEventListener("submit", async (e) => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url }),
+            credentials: "include",
         });
         const data = await res.json();
         if (!res.ok) {
@@ -287,7 +494,7 @@ urlForm.addEventListener("submit", async (e) => {
 reindexBtn.addEventListener("click", async () => {
     setUploadStatus("Re-indexing all documents...");
     try {
-        const res = await fetch("/api/admin/reindex", { method: "POST" });
+        const res = await fetch("/api/admin/reindex", { method: "POST", credentials: "include" });
         const data = await res.json();
         setUploadStatus(data.status === "reindex_complete" ? "Re-index complete." : "Re-index started.");
         await refresh();
@@ -320,6 +527,7 @@ settingsForm.addEventListener("submit", async (e) => {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
+            credentials: "include",
         });
         const data = await res.json();
         if (!res.ok) {
@@ -349,7 +557,7 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && confirmDialog && !confirmDialog.hidden) closeConfirm();
 });
 
-refresh();
+initAuth();
 
 function embedSnippet(width, height) {
     const origin = window.location.origin;

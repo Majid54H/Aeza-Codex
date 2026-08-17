@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import re
+import hashlib
+import secrets
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -15,8 +17,9 @@ from app.config import settings
 
 CHUNK_MAPPING_FILE = "chunk_mapping.json"
 SETTINGS_FILE = "admin_settings.json"
+ADMIN_CREDENTIALS_FILE = "admin_credentials.json"
 FAISS_INDEX_FILE = "faiss.index"
-SKIP_METADATA_FILES = {CHUNK_MAPPING_FILE, SETTINGS_FILE}
+SKIP_METADATA_FILES = {CHUNK_MAPPING_FILE, SETTINGS_FILE, ADMIN_CREDENTIALS_FILE}
 
 DEFAULT_SETTINGS = {
     "chatbot_name": "",
@@ -111,6 +114,14 @@ class StorageBackend(ABC):
         ...
 
     @abstractmethod
+    async def load_admin_credentials(self) -> dict:
+        ...
+
+    @abstractmethod
+    async def save_admin_credentials(self, creds: dict) -> None:
+        ...
+
+    @abstractmethod
     def save_products(self, document_id: str, products: dict) -> None:
         ...
 
@@ -143,6 +154,13 @@ class LocalStorage(StorageBackend):
         self.catalogs_dir.mkdir(parents=True, exist_ok=True)
         self.products_dir = self.metadata_dir / "products"
         self.products_dir.mkdir(parents=True, exist_ok=True)
+        self._admin_credentials_path = self.metadata_dir / ADMIN_CREDENTIALS_FILE
+
+    def _hash_password(self, password: str, salt: str, iterations: int) -> str:
+        salt_bytes = (salt or "").encode("utf-8")
+        pwd_bytes = (password or "").encode("utf-8")
+        dk = hashlib.pbkdf2_hmac("sha256", pwd_bytes, salt_bytes, iterations)
+        return dk.hex()
 
     def _document_paths(self, document_id: str) -> list[Path]:
         prefix = f"{document_id}_"
@@ -392,6 +410,45 @@ class LocalStorage(StorageBackend):
                 if isinstance(item, dict) and item.get("name"):
                     products.append(item)
         return products
+
+    async def load_admin_credentials(self) -> dict:
+        path = self._admin_credentials_path
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if (
+                    isinstance(data, dict)
+                    and data.get("username")
+                    and data.get("password_hash")
+                    and data.get("salt")
+                    and data.get("iterations")
+                ):
+                    return data
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if not settings.admin_password:
+            raise RuntimeError("Admin password not configured. Set ADMIN_PASSWORD in the environment.")
+
+        salt = secrets.token_hex(16)
+        iterations = 200_000
+        password_hash = self._hash_password(settings.admin_password, salt=salt, iterations=iterations)
+        creds = {
+            "username": settings.admin_username,
+            "password_hash": password_hash,
+            "salt": salt,
+            "iterations": iterations,
+        }
+
+        try:
+            path.write_text(json.dumps(creds, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+
+        return creds
+
+    async def save_admin_credentials(self, creds: dict) -> None:
+        self._admin_credentials_path.write_text(json.dumps(creds, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def get_storage() -> StorageBackend:
