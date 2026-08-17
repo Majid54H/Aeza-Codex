@@ -6,6 +6,7 @@ Persistence goes through app.storage — no direct filesystem paths here.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import faiss  # type: ignore
@@ -20,6 +21,8 @@ _index: Any | None = None
 _mapping: list[dict[str, Any]] = []
 _dim: int | None = None
 _loaded_fingerprint: int | None = None
+_last_stale_check: float = 0.0
+_STALE_CHECK_SECONDS = 20.0
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:
@@ -40,19 +43,34 @@ def _persisted_mapping_len() -> int:
 
 def _ensure_loaded() -> None:
     """Hydrate RAM from storage when empty or stale (Vercel multi-instance)."""
+    global _last_stale_check
+
+    now = time.monotonic()
     if _index is not None and _index.ntotal > 0 and _loaded_fingerprint is not None:
+        if now - _last_stale_check < _STALE_CHECK_SECONDS:
+            return
+        _last_stale_check = now
         if _persisted_mapping_len() == _loaded_fingerprint:
             return
         load()
         return
 
     if _loaded_fingerprint == 0 and _index is None:
+        if now - _last_stale_check < _STALE_CHECK_SECONDS:
+            return
+        _last_stale_check = now
         if _persisted_mapping_len() == 0:
             return
         load()
         return
 
     load()
+    _last_stale_check = time.monotonic()
+
+
+def ensure_loaded() -> None:
+    """Public wrapper so chat can hydrate the index in parallel with embeddings."""
+    _ensure_loaded()
 
 
 def create_index(dim: int) -> None:
@@ -117,7 +135,7 @@ def add(
 
 def save() -> None:
     """Persist FAISS index (as bytes) and chunk mapping via storage."""
-    global _loaded_fingerprint
+    global _loaded_fingerprint, _last_stale_check
     if _index is None:
         return
 
@@ -126,6 +144,7 @@ def save() -> None:
     storage.save_faiss_index(np.asarray(serialized).tobytes())
     storage.save_chunk_mapping(_mapping)
     _loaded_fingerprint = len(_mapping)
+    _last_stale_check = time.monotonic()
 
 
 def load() -> None:
@@ -169,9 +188,10 @@ def load() -> None:
     _loaded_fingerprint = len(_mapping)
 
 
-def search(vector: list[float], top_k: int = 5) -> list[dict]:
+def search(vector: list[float], top_k: int = 5, *, hydrate: bool = True) -> list[dict]:
     """Search by embedding vector and return matching chunk metadata + scores."""
-    _ensure_loaded()
+    if hydrate:
+        _ensure_loaded()
     if _index is None or not _mapping or _index.ntotal == 0:
         return []
 
@@ -218,12 +238,13 @@ def rebuild() -> None:
     reset()
 
 
-def stats() -> dict[str, int]:
-    """Index size from storage (hydrates RAM if needed)."""
-    try:
-        _ensure_loaded()
-    except Exception:
-        logger.exception("Could not load FAISS stats from storage")
+def stats(*, hydrate: bool = False) -> dict[str, int]:
+    """Index size. Set hydrate=True to load from storage first."""
+    if hydrate:
+        try:
+            _ensure_loaded()
+        except Exception:
+            logger.exception("Could not load FAISS stats from storage")
     return {
         "vectors": int(_index.ntotal) if _index is not None else 0,
         "chunks": len(_mapping),

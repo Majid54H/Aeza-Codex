@@ -1,6 +1,18 @@
 """Embedding generation."""
 
+from openai import AsyncOpenAI
+
 from app.config import settings
+
+
+def _client() -> AsyncOpenAI:
+    kwargs: dict = {
+        "api_key": settings.openai_api_key,
+        "timeout": settings.llm_timeout_seconds,
+    }
+    if settings.openai_base_url:
+        kwargs["base_url"] = settings.openai_base_url
+    return AsyncOpenAI(**kwargs)
 
 
 async def embed(texts: list[str], input_type: str = "query") -> list[list[float]]:
@@ -15,12 +27,7 @@ async def embed(texts: list[str], input_type: str = "query") -> list[list[float]
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured")
 
-    from openai import AsyncOpenAI
-
-    kwargs: dict = {"api_key": settings.openai_api_key}
-    if settings.openai_base_url:
-        kwargs["base_url"] = settings.openai_base_url
-    client = AsyncOpenAI(**kwargs)
+    client = _client()
     create_kwargs: dict = {
         "model": settings.embedding_model,
         "input": texts,

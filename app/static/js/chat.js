@@ -566,6 +566,30 @@ document.querySelectorAll(".welcome-chip").forEach((chip) => {
 
 applyBranding();
 
+async function requestJsonChat(message) {
+    const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, session_id: sessionId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const err = new Error(data.detail || "chat failed");
+        err.status = res.status;
+        throw err;
+    }
+    if (data.session_id) sessionId = data.session_id;
+    return { text: data.reply || "", ui: data.ui || null };
+}
+
+function failMessage(err) {
+    const status = err && err.status;
+    if (status === 504 || status === 408) {
+        return "The assistant took too long to answer. Please try again in a moment.";
+    }
+    return "Sorry, something went wrong. Please try again.";
+}
+
 form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const message = input.value.trim();
@@ -581,6 +605,7 @@ form.addEventListener("submit", async (e) => {
 
     let bubble = null;
     let fullText = "";
+    let ui = null;
 
     try {
         const res = await fetch("/api/chat/stream", {
@@ -589,7 +614,9 @@ form.addEventListener("submit", async (e) => {
             body: JSON.stringify({ message, session_id: sessionId }),
         });
         if (!res.ok || !res.body) {
-            throw new Error("stream failed");
+            const err = new Error("stream failed");
+            err.status = res.status;
+            throw err;
         }
         await readChatStream(res, (event) => {
             if (event.type === "meta" && event.session_id) {
@@ -603,27 +630,37 @@ form.addEventListener("submit", async (e) => {
                 fullText += event.text;
                 updateAssistantMessage(bubble, fullText);
             }
-            if (event.type === "done" && event.ui && bubble) {
-                const stack = bubble.closest(".msg-stack");
-                renderProductUi(stack, event.ui);
+            if (event.type === "done" && event.ui) {
+                ui = event.ui;
             }
             if (event.type === "error") {
                 if (!bubble) {
                     hideTyping();
                     bubble = startAssistantMessage();
                 }
-                updateAssistantMessage(bubble, event.text || "Sorry, something went wrong. Please try again.");
+                fullText = event.text || failMessage();
+                updateAssistantMessage(bubble, fullText);
             }
         });
         if (!fullText) {
-            hideTyping();
-            if (!bubble) bubble = startAssistantMessage();
-            updateAssistantMessage(bubble, "Sorry, something went wrong. Please try again.");
+            const fallback = await requestJsonChat(message);
+            fullText = fallback.text;
+            ui = fallback.ui;
         }
-        if (bubble) bubble.classList.remove("is-streaming");
-    } catch {
         hideTyping();
-        appendMessage("assistant", "Sorry, something went wrong. Please try again.");
+        if (!bubble) bubble = startAssistantMessage();
+        if (fullText) updateAssistantMessage(bubble, fullText);
+        if (ui && bubble) {
+            const stack = bubble.closest(".msg-stack");
+            renderProductUi(stack, ui);
+        }
+        if (!fullText) updateAssistantMessage(bubble, failMessage());
+        if (bubble) bubble.classList.remove("is-streaming");
+    } catch (err) {
+        hideTyping();
+        const text = failMessage(err);
+        if (!bubble) appendMessage("assistant", text);
+        else updateAssistantMessage(bubble, text);
     } finally {
         if (loadingIndicator) loadingIndicator.classList.remove("active");
         if (sendButton) sendButton.disabled = false;

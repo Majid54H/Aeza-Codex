@@ -1,5 +1,6 @@
 """Chat service — orchestrates RAG retrieval and LLM generation."""
 
+import asyncio
 import re
 import uuid
 
@@ -264,11 +265,14 @@ async def _retrieve_chunks(message: str) -> list[dict]:
     catalog_intent = is_catalog_query(message)
     top_k = settings.rag_catalog_top_k if catalog_intent else settings.rag_top_k
 
-    query_vectors = await embeddings.embed([message], input_type="query")
+    query_vectors, _ = await asyncio.gather(
+        embeddings.embed([message], input_type="query"),
+        asyncio.to_thread(faiss.ensure_loaded),
+    )
     if not query_vectors:
         return []
 
-    hits = faiss.search(query_vectors[0], top_k=top_k)
+    hits = faiss.search(query_vectors[0], top_k=top_k, hydrate=False)
     chunks = [c for c in hits if c.get("score", 0.0) >= settings.rag_min_score]
 
     if catalog_intent:

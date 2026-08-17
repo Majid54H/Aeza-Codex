@@ -117,14 +117,17 @@ class OpenAIProvider(LLMProvider):
     async def generate(self, messages: list[dict[str, str]]) -> str:
         from openai import AsyncOpenAI
 
-        kwargs: dict[str, Any] = {"api_key": self.api_key}
+        kwargs: dict[str, Any] = {
+            "api_key": self.api_key,
+            "timeout": settings.llm_timeout_seconds,
+        }
         if self.base_url:
             kwargs["base_url"] = self.base_url
         client = AsyncOpenAI(**kwargs)
         response = await client.chat.completions.create(
             model=self.model,
             messages=messages,
-            max_tokens=settings.chat_max_tokens,
+            max_tokens=settings.effective_chat_max_tokens,
         )
         message = response.choices[0].message
         content = message.content
@@ -133,14 +136,17 @@ class OpenAIProvider(LLMProvider):
     async def generate_stream(self, messages: list[dict[str, str]]):
         from openai import AsyncOpenAI
 
-        kwargs: dict[str, Any] = {"api_key": self.api_key}
+        kwargs: dict[str, Any] = {
+            "api_key": self.api_key,
+            "timeout": settings.llm_timeout_seconds,
+        }
         if self.base_url:
             kwargs["base_url"] = self.base_url
         client = AsyncOpenAI(**kwargs)
         stream = await client.chat.completions.create(
             model=self.model,
             messages=messages,
-            max_tokens=settings.chat_max_tokens,
+            max_tokens=settings.effective_chat_max_tokens,
             stream=True,
         )
         async for chunk in stream:

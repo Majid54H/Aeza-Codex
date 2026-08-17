@@ -45,6 +45,17 @@ class Settings(BaseSettings):
         return self.max_upload_size_mb * 1024 * 1024
 
     @property
+    def llm_timeout_seconds(self) -> float:
+        """Leave headroom under Vercel function maxDuration."""
+        return 50.0 if self.is_vercel else 120.0
+
+    @property
+    def effective_chat_max_tokens(self) -> int:
+        if self.is_vercel:
+            return min(int(self.chat_max_tokens or 1024), 1024)
+        return int(self.chat_max_tokens or 4096)
+
+    @property
     def is_vercel(self) -> bool:
         return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
