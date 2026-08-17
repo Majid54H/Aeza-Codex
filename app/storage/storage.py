@@ -477,7 +477,7 @@ def get_storage() -> StorageBackend:
     if backend == "blob":
         from app.storage.blob_storage import BlobStorage
 
-        _storage_singleton = BlobStorage(settings.blob_prefix)
+        _storage_singleton = BlobStorage(settings.blob_prefix, token=settings.blob_token)
     else:
-        _storage_singleton = LocalStorage(settings.data_dir)
+        _storage_singleton = LocalStorage(settings.effective_data_dir)
     return _storage_singleton

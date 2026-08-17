@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     admin_password: str = ""
     storage_backend: str = ""
     blob_prefix: str = "aeza-codex"
+    blob_read_write_token: str = ""
 
     @field_validator("environment", mode="before")
     @classmethod
@@ -44,12 +45,30 @@ class Settings(BaseSettings):
         return self.max_upload_size_mb * 1024 * 1024
 
     @property
+    def is_vercel(self) -> bool:
+        return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+
+    @property
+    def blob_token(self) -> str:
+        return (self.blob_read_write_token or os.environ.get("BLOB_READ_WRITE_TOKEN") or "").strip()
+
+    @property
+    def effective_data_dir(self) -> Path:
+        """Writable data path — /tmp on Vercel when Blob is not configured."""
+        if self.is_vercel and not self.blob_token:
+            return Path("/tmp/aeza-codex")
+        return self.data_dir
+
+    @property
     def resolved_storage_backend(self) -> str:
-        # Vercel has a read-only filesystem — always use Blob there.
-        if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
-            return "blob"
+        if self.is_vercel:
+            if self.blob_token:
+                return "blob"
+            return "local"
         explicit = (self.storage_backend or "").strip().lower()
         if explicit in {"local", "blob"}:
+            if explicit == "blob" and not self.blob_token:
+                return "local"
             return explicit
         return "local"
 

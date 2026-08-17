@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 from typing import Any
 
@@ -24,9 +25,15 @@ from app.storage.storage import (
 
 
 class BlobStorage(StorageBackend):
-    def __init__(self, prefix: str = "aeza-codex"):
+    def __init__(self, prefix: str = "aeza-codex", token: str | None = None):
         self._prefix = (prefix or "aeza-codex").strip("/").strip()
-        self._client = BlobClient()
+        self._token = (token or settings.blob_token or os.environ.get("BLOB_READ_WRITE_TOKEN") or "").strip()
+        if not self._token:
+            raise RuntimeError(
+                "BLOB_READ_WRITE_TOKEN is not configured. "
+                "Connect a Vercel Blob store to this project, or set BLOB_READ_WRITE_TOKEN."
+            )
+        self._client = BlobClient(token=self._token)
 
     def _path(self, *parts: str) -> str:
         cleaned = [self._prefix] if self._prefix else []

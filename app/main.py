@@ -84,10 +84,15 @@ async def health():
         "status": "ok" if _startup_ready and not _startup_error else "degraded",
         "environment": settings.environment,
         "storage_backend": settings.resolved_storage_backend,
+        "blob_configured": bool(settings.blob_token),
         "ready": _startup_ready,
     }
     if _startup_error:
         payload["startup_error"] = _startup_error
+    if settings.is_vercel and not settings.blob_token:
+        payload["storage_note"] = (
+            "Using /tmp storage (ephemeral). Connect Vercel Blob for persistent knowledge."
+        )
     return payload
 
 
