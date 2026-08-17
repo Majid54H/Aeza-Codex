@@ -5,9 +5,9 @@ Self-hostable RAG chatbot for a business knowledge base. FastAPI backend, vanill
 ## Features
 
 - Customer chat at `/chat` with grounded answers from indexed documents and website pages
-- Admin dashboard at `/admin` (HTTP Basic auth) for uploads, URL ingest, branding, and reindex
+- Admin dashboard at `/admin` (custom login) for uploads, URL ingest, branding, and reindex
 - PDF / DOCX / TXT upload and single-page website ingest (no crawl)
-- FAISS vector index persisted under `data/` via `LocalStorage`
+- FAISS vector index persisted via `LocalStorage` (local) or `BlobStorage` (Vercel)
 
 ## Requirements
 
@@ -40,7 +40,7 @@ uvicorn app.main:app --reload
 Then open:
 
 - Chat: http://localhost:8000/chat
-- Admin: http://localhost:8000/admin (browser will prompt for Basic auth)
+- Admin: http://localhost:8000/admin
 - Health: http://localhost:8000/health
 
 ## Environment variables
@@ -61,6 +61,51 @@ Then open:
 | `RAG_MIN_SCORE` | No | `0.25` | Minimum similarity for retrieved chunks |
 | `WEB_FETCH_TIMEOUT_SECONDS` | No | `15` | |
 | `WEB_FETCH_MAX_BYTES` | No | `2000000` | Max HTML body size for URL ingest |
+| `STORAGE_BACKEND` | No | `local` (auto `blob` on Vercel) | `local` or `blob` |
+| `BLOB_PREFIX` | No | `aeza-codex` | Root folder inside Vercel Blob store |
+
+## Deploy on Vercel (with Vercel Blob)
+
+Aeza Codex can run on Vercel using **Vercel Blob** for durable storage (documents, FAISS index, catalogs, admin data). FAISS still loads in memory per function instance; cold starts reload the index from Blob (first request may be slower).
+
+### 1. Create Blob store
+
+In the Vercel project: **Storage → Create → Blob**, connect it to the project. This adds `BLOB_READ_WRITE_TOKEN` automatically.
+
+### 2. Environment variables
+
+Set these in the Vercel dashboard (names must use only letters, digits, and underscores):
+
+| Name | Example value |
+|------|----------------|
+| `ENVIRONMENT` | `production` |
+| `OPENAI_API_KEY` | your API key |
+| `OPENAI_BASE_URL` | `https://integrate.api.nvidia.com/v1` |
+| `ADMIN_PASSWORD` | strong password |
+| `ADMIN_USERNAME` | `admin` |
+| `EMBEDDING_MODEL` | `nvidia/nv-embedqa-e5-v5` |
+| `CHAT_MODEL` | `openai/gpt-oss-120b` |
+| `STORAGE_BACKEND` | `blob` |
+
+Model paths go in the **value** of `EMBEDDING_MODEL` / `CHAT_MODEL`, not as separate variable names.
+
+### 3. Deploy
+
+Push to GitHub and import the repo on Vercel, or run `vercel --prod`. The repo includes [`vercel.json`](vercel.json) and [`pyproject.toml`](pyproject.toml) for Python 3.12.
+
+### 4. Verify
+
+- `GET /health` → `{ "status": "ok", "storage_backend": "blob", "ready": true }`
+- `/admin` and `/chat` load without 500 errors
+- Upload a document in admin; it should appear under `aeza-codex/` in your Blob store
+
+### Local dev with Blob (optional)
+
+```bash
+vercel env pull .env.local
+# Add STORAGE_BACKEND=blob to .env.local
+uvicorn app.main:app --reload
+```
 
 ## Routes
 
@@ -68,7 +113,7 @@ Then open:
 |--------|------|------|-------------|
 | GET | `/health` | Public | Liveness |
 | GET | `/chat` | Public | Customer chat UI |
-| GET | `/admin` | Basic | Admin UI |
+| GET | `/admin` | Public UI | Admin UI (login required for API) |
 | POST | `/api/chat` | Public | Send a chat message |
 | GET | `/api/admin/settings` | Public | Branding for chat UI |
 | PUT | `/api/admin/settings` | Basic | Update branding |
@@ -81,12 +126,12 @@ Then open:
 ## Architecture (V1)
 
 ```
-app/api → app/services → app/ingestion | app/rag → app/storage (LocalStorage)
+app/api → app/services → app/ingestion | app/rag → app/storage (LocalStorage or BlobStorage)
 templates/ + static/ (vanilla JS)
-data/{documents,indexes,metadata}
+data/ (local) or Vercel Blob (serverless)
 ```
 
-Persistent V1 uses **local disk only**. Serverless platforms (including Vercel) are **not supported** for durable knowledge — there is no `vercel.json`.
+Local development uses **local disk** by default. On Vercel (`VERCEL=1`), storage auto-selects **Blob** unless `STORAGE_BACKEND=local` is set.
 
 ## Operational notes
 

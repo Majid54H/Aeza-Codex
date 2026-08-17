@@ -1,6 +1,11 @@
 """Aeza Codex — FastAPI application entry point."""
 
-from fastapi import Depends, FastAPI, Request
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
@@ -9,8 +14,39 @@ from app.api import admin, chat, knowledge as knowledge_api
 from app.config import settings
 from app.rag import faiss as faiss_index
 from app.services import knowledge as knowledge_service
+from app.storage.storage import get_storage
 
-app = FastAPI(title="Aeza Codex", version="1.0.0")
+logger = logging.getLogger(__name__)
+
+_startup_error: str | None = None
+_startup_ready = False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _startup_error, _startup_ready
+    _startup_error = None
+    _startup_ready = False
+
+    try:
+        if settings.environment == "production" and not settings.openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY is required when ENVIRONMENT=production")
+
+        backend = settings.resolved_storage_backend
+        logger.info("Aeza Codex starting with storage backend: %s", backend)
+        get_storage()
+
+        faiss_index.load()
+        await knowledge_service.rebuild_catalogs_from_documents()
+        _startup_ready = True
+    except Exception as exc:
+        _startup_error = str(exc)
+        logger.exception("Startup initialization failed: %s", exc)
+
+    yield
+
+
+app = FastAPI(title="Aeza Codex", version="1.0.0", lifespan=lifespan)
 
 
 class DevStaticFiles(StaticFiles):
@@ -37,9 +73,22 @@ app.include_router(knowledge_api.router, prefix="/api/knowledge", tags=["knowled
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
+@app.get("/")
+async def root():
+    return {"service": "Aeza Codex", "chat": "/chat", "admin": "/admin", "health": "/health"}
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "environment": settings.environment}
+    payload = {
+        "status": "ok" if _startup_ready and not _startup_error else "degraded",
+        "environment": settings.environment,
+        "storage_backend": settings.resolved_storage_backend,
+        "ready": _startup_ready,
+    }
+    if _startup_error:
+        payload["startup_error"] = _startup_error
+    return payload
 
 
 @app.get("/admin")
@@ -58,11 +107,3 @@ async def chat_page(request: Request, embed: str = ""):
             "embed": embed.lower() in {"1", "true", "yes"},
         },
     )
-
-
-@app.on_event("startup")
-async def startup():
-    if settings.environment == "production" and not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is required when ENVIRONMENT=production")
-    faiss_index.load()
-    await knowledge_service.rebuild_catalogs_from_documents()

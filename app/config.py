@@ -3,10 +3,17 @@
 import os
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     environment: str = "development"
     openai_api_key: str = ""
     openai_base_url: str = ""
@@ -23,19 +30,32 @@ class Settings(BaseSettings):
     web_fetch_max_bytes: int = 2_000_000
     admin_username: str = "admin"
     admin_password: str = ""
+    storage_backend: str = ""
+    blob_prefix: str = "aeza-codex"
+
+    @field_validator("environment", mode="before")
+    @classmethod
+    def normalize_environment(cls, value: object) -> str:
+        text = str(value or "development").strip().lower()
+        return text or "development"
 
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_size_mb * 1024 * 1024
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    @property
+    def resolved_storage_backend(self) -> str:
+        explicit = (self.storage_backend or "").strip().lower()
+        if explicit in {"local", "blob"}:
+            return explicit
+        if os.environ.get("VERCEL"):
+            return "blob"
+        return "local"
 
 
 settings = Settings()
 
-# Ensure local data directories exist in development
-if settings.environment == "development":
+# Ensure local data directories exist in development (local disk only)
+if settings.environment == "development" and settings.resolved_storage_backend == "local":
     for subdir in ("documents", "indexes", "metadata"):
         (settings.data_dir / subdir).mkdir(parents=True, exist_ok=True)
