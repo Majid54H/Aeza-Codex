@@ -264,7 +264,7 @@ async def _retrieve_chunks(message: str) -> list[dict]:
     catalog_intent = is_catalog_query(message)
     top_k = settings.rag_catalog_top_k if catalog_intent else settings.rag_top_k
 
-    query_vectors = await embeddings.embed([message])
+    query_vectors = await embeddings.embed([message], input_type="query")
     if not query_vectors:
         return []
 

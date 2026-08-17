@@ -5,6 +5,7 @@ Persistence goes through app.storage — no direct filesystem paths here.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import faiss  # type: ignore
@@ -12,10 +13,13 @@ import numpy as np
 
 from app.storage.storage import get_storage
 
-# In-memory state (reconstructed from storage on startup)
+logger = logging.getLogger(__name__)
+
+# In-memory state (reconstructed from storage on demand)
 _index: Any | None = None
 _mapping: list[dict[str, Any]] = []
 _dim: int | None = None
+_loaded_fingerprint: int | None = None
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:
@@ -29,6 +33,28 @@ def _storage():
     return get_storage()
 
 
+def _persisted_mapping_len() -> int:
+    mapping = _storage().load_chunk_mapping()
+    return len(mapping) if isinstance(mapping, list) else 0
+
+
+def _ensure_loaded() -> None:
+    """Hydrate RAM from storage when empty or stale (Vercel multi-instance)."""
+    if _index is not None and _index.ntotal > 0 and _loaded_fingerprint is not None:
+        if _persisted_mapping_len() == _loaded_fingerprint:
+            return
+        load()
+        return
+
+    if _loaded_fingerprint == 0 and _index is None:
+        if _persisted_mapping_len() == 0:
+            return
+        load()
+        return
+
+    load()
+
+
 def create_index(dim: int) -> None:
     """Create a new FAISS index with the given embedding dimension."""
     global _index, _dim
@@ -38,10 +64,11 @@ def create_index(dim: int) -> None:
 
 def reset() -> None:
     """Clear in-memory index, mapping, and persisted index."""
-    global _index, _mapping, _dim
+    global _index, _mapping, _dim, _loaded_fingerprint
     _index = None
     _mapping = []
     _dim = None
+    _loaded_fingerprint = 0
 
     storage = _storage()
     storage.delete_faiss_index()
@@ -65,6 +92,7 @@ def add(
         raise ValueError("Vectors must be a 2D array")
 
     dim = int(vecs.shape[1])
+    _ensure_loaded()
     if _index is None:
         create_index(dim)
     elif _dim != dim:
@@ -89,6 +117,7 @@ def add(
 
 def save() -> None:
     """Persist FAISS index (as bytes) and chunk mapping via storage."""
+    global _loaded_fingerprint
     if _index is None:
         return
 
@@ -96,37 +125,53 @@ def save() -> None:
     serialized = faiss.serialize_index(_index)
     storage.save_faiss_index(np.asarray(serialized).tobytes())
     storage.save_chunk_mapping(_mapping)
+    _loaded_fingerprint = len(_mapping)
 
 
 def load() -> None:
     """Load FAISS index and chunk mapping from storage. Safe if missing."""
-    global _index, _mapping, _dim
+    global _index, _mapping, _dim, _loaded_fingerprint
 
     storage = _storage()
-    _mapping = storage.load_chunk_mapping()
+    mapping = storage.load_chunk_mapping()
+    _mapping = mapping if isinstance(mapping, list) else []
 
     raw = storage.load_faiss_index()
     if not raw:
         _index = None
         _dim = None
+        _loaded_fingerprint = len(_mapping)
+        if _mapping:
+            logger.warning(
+                "Chunk mapping has %s entries but FAISS index is missing from storage",
+                len(_mapping),
+            )
         return
 
     try:
-        arr = np.frombuffer(raw, dtype=np.uint8)
+        arr = np.frombuffer(raw, dtype=np.uint8).copy()
         _index = faiss.deserialize_index(arr)
         _dim = int(_index.d)
     except Exception:
+        logger.exception("Failed to deserialize FAISS index (%s bytes)", len(raw))
         _index = None
         _dim = None
-        _mapping = []
+        _loaded_fingerprint = len(_mapping)
         return
 
     if len(_mapping) > _index.ntotal:
+        logger.warning(
+            "Truncating chunk mapping from %s to %s to match FAISS ntotal",
+            len(_mapping),
+            _index.ntotal,
+        )
         _mapping = _mapping[: _index.ntotal]
+    _loaded_fingerprint = len(_mapping)
 
 
 def search(vector: list[float], top_k: int = 5) -> list[dict]:
     """Search by embedding vector and return matching chunk metadata + scores."""
+    _ensure_loaded()
     if _index is None or not _mapping or _index.ntotal == 0:
         return []
 
@@ -151,6 +196,7 @@ def remove_document(document_id: str) -> None:
     """Drop all vectors for a document and persist the remaining index."""
     global _index, _mapping, _dim
 
+    _ensure_loaded()
     keep_idx = [i for i, item in enumerate(_mapping) if item.get("document_id") != document_id]
     if len(keep_idx) == len(_mapping):
         return
@@ -170,3 +216,15 @@ def remove_document(document_id: str) -> None:
 def rebuild() -> None:
     """Clear the index for a full rebuild (used by reindex)."""
     reset()
+
+
+def stats() -> dict[str, int]:
+    """Index size from storage (hydrates RAM if needed)."""
+    try:
+        _ensure_loaded()
+    except Exception:
+        logger.exception("Could not load FAISS stats from storage")
+    return {
+        "vectors": int(_index.ntotal) if _index is not None else 0,
+        "chunks": len(_mapping),
+    }

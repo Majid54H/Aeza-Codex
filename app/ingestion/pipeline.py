@@ -70,7 +70,7 @@ async def _index_chunks(
         await storage.save_metadata(document_id, metadata)
         return []
 
-    vectors = await embeddings.embed([c["text"] for c in chunks])
+    vectors = await embeddings.embed([c["text"] for c in chunks], input_type="passage")
     faiss.add(document_id, chunks, vectors, filename=filename)
     await storage.save_metadata(document_id, metadata)
     return chunks

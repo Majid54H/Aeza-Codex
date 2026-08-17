@@ -80,18 +80,25 @@ async def root():
 
 @app.get("/health")
 async def health():
+    faiss_stats = faiss_index.stats()
     payload = {
         "status": "ok" if _startup_ready and not _startup_error else "degraded",
         "environment": settings.environment,
         "storage_backend": settings.resolved_storage_backend,
         "blob_configured": bool(settings.blob_token),
         "ready": _startup_ready,
+        "faiss_vectors": faiss_stats["vectors"],
+        "faiss_chunks": faiss_stats["chunks"],
     }
     if _startup_error:
         payload["startup_error"] = _startup_error
     if settings.is_vercel and not settings.blob_token:
         payload["storage_note"] = (
             "Using /tmp storage (ephemeral). Connect Vercel Blob for persistent knowledge."
+        )
+    elif faiss_stats["vectors"] == 0:
+        payload["index_note"] = (
+            "FAISS index is empty. Upload a document or use Admin → Re-index."
         )
     return payload
 
